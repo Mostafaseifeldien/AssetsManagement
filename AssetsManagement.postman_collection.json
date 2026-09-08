@@ -1,0 +1,465 @@
+{
+  "info": {
+    "_postman_id": "7ea2df8e-9288-4f73-9863-assetsmanagement",
+    "name": "AssetsManagement API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5288" },
+    { "key": "accessToken", "value": "" },
+    { "key": "assetId", "value": "" },
+    { "key": "recordId", "value": "" },
+    { "key": "typeAttributeId", "value": "" },
+    { "key": "identifierId", "value": "" },
+    { "key": "replacementId", "value": "" },
+    { "key": "imageId", "value": "" },
+    { "key": "statusId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login and save JWT",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"admin\",\"password\":\"Admin@123\"}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Login succeeds', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]}
+          }]
+        },
+        {
+          "name": "Invalid login",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"admin\",\"password\":\"wrong\"}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Master Data",
+      "item": [
+        {
+          "name": "List Asset Types",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types?search=&assetCategory=&active=&sortBy=name&sortDirection=asc" }
+        },
+        {
+          "name": "Create Asset Type",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Laptop\",\"code\":\"LAPTOP\",\"assetCategory\":\"IT Equipment\",\"requiresSerialNumber\":\"Yes\",\"defaultStatus\":\"Working\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"alternateName\":\"\",\"requiresRfidTag\":\"No\",\"requiresBarcode\":\"No\",\"permittedStatusTransitions\":\"\",\"customAttributeSchema\":\"\",\"defaultDepreciationMethod\":\"Straight line\",\"defaultUsefulLife\":36,\"numberingScheme\":\"LAP-#####\"}" },
+            "url": "{{baseUrl}}/api/asset-types"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('recordId', pm.response.json().data.id);"] }
+          }]
+        },
+        {
+          "name": "Get Asset Type",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types/{{recordId}}" }
+        },
+        {
+          "name": "Update Asset Type",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Laptop\",\"code\":\"LAPTOP\",\"assetCategory\":\"IT Equipment\",\"requiresSerialNumber\":\"Yes\",\"defaultStatus\":\"Working\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"alternateName\":\"\",\"requiresRfidTag\":\"No\",\"requiresBarcode\":\"No\",\"numberingScheme\":\"LAP-#####\"}" },
+            "url": "{{baseUrl}}/api/asset-types/{{recordId}}"
+          }
+        },
+        {
+          "name": "Asset Type History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types/{{recordId}}/history" }
+        },
+        {
+          "name": "Invalid Manufacturer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"code\":\"bad code\",\"name\":\"\"}" },
+            "url": "{{baseUrl}}/api/manufacturers"
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-categories?search=&parentCategory=&active=&sortBy=name&sortDirection=asc" }
+        },
+        {
+          "name": "Create Asset Category",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"IT Equipment\",\"code\":\"IT\",\"active\":true,\"alternateName\":\"\",\"parentCategory\":\"\",\"accountCode\":\"1520\"}" },
+            "url": "{{baseUrl}}/api/asset-categories"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('recordId', pm.response.json().data.id);"] }
+          }]
+        },
+        {
+          "name": "Update Asset Category",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"IT Equipment\",\"code\":\"IT\",\"active\":true,\"alternateName\":\"\",\"parentCategory\":\"\",\"accountCode\":\"12345\"}" },
+            "url": "{{baseUrl}}/api/asset-categories/{{recordId}}"
+          }
+        },
+        {
+          "name": "Asset Category History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-categories/{{recordId}}/history" }
+        },
+        {
+          "name": "List Models",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-models?search=&manufacturer=&assetType=&active=&sortBy=name&sortDirection=asc" }
+        },
+        {
+          "name": "Create Asset Model",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Latitude 5540\",\"manufacturer\":\"Dell\",\"modelNumber\":\"5540\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"alternateName\":\"\",\"assetType\":\"Laptop\",\"specifications\":\"\",\"expectedUsefulLife\":36,\"documentation\":\"\"}" },
+            "url": "{{baseUrl}}/api/asset-models"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('recordId', pm.response.json().data.id);"] }
+          }]
+        },
+        {
+          "name": "Get Asset Model",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-models/{{recordId}}" }
+        },
+        {
+          "name": "Asset Model History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-models/{{recordId}}/history" }
+        },
+        {
+          "name": "List Manufacturers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/manufacturers?search=&active=&sortBy=name&sortDirection=asc" }
+        },
+        {
+          "name": "Create Manufacturer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Dell\",\"code\":\"DELL\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"alternateName\":\"\",\"country\":\"United States\",\"supportContact\":\"\",\"website\":\"\"}" },
+            "url": "{{baseUrl}}/api/manufacturers"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('recordId', pm.response.json().data.id);"] }
+          }]
+        },
+        {
+          "name": "Get Manufacturer",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/manufacturers/{{recordId}}" }
+        },
+        {
+          "name": "Update Manufacturer",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Dell\",\"code\":\"DELL\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"alternateName\":\"\",\"country\":\"United States\",\"supportContact\":\"\",\"website\":\"\"}" },
+            "url": "{{baseUrl}}/api/manufacturers/{{recordId}}"
+          }
+        },
+        {
+          "name": "Manufacturer History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/manufacturers/{{recordId}}/history" }
+        },
+        {
+          "name": "List Suppliers",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/suppliers" }
+        },
+        {
+          "name": "List Asset Statuses",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-statuses" }
+        },
+        {
+          "name": "List Custom Attribute Definitions",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/custom-attribute-definitions" }
+        },
+        {
+          "name": "List Type Attributes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes?pageNumber=1&pageSize=20" }
+        }
+      ]
+    },
+    {
+      "name": "Identifiers",
+      "item": [
+        {
+          "name": "Create RFID Tag",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"tagIdentifier\":\"EPC:3034-DEMO-001\",\"tagType\":\"Passive UHF\",\"encodingStandard\":\"GS1 SGTIN\"}" },
+            "url": "{{baseUrl}}/api/rfid-tags"
+          }
+        },
+        {
+          "name": "List RFID Stock",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rfid-tags?status=Unassigned" }
+        },
+        {
+          "name": "Generate Barcode",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/barcodes/generate?symbology=Code128" }
+        },
+        {
+          "name": "List Barcodes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/barcodes?pageNumber=1&pageSize=20" }
+        }
+      ]
+    },
+    {
+      "name": "Images and Lookups",
+      "item": [
+        {
+          "name": "Asset Lookup",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/lookup?search=" },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "const body = pm.response.json();",
+              "if (body.data && body.data.length) pm.collectionVariables.set('assetId', body.data[0].id);"
+            ]}
+          }]
+        },
+        {
+          "name": "Upload Asset Image",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] },
+                { "key": "caption", "value": "Front view", "type": "text" },
+                { "key": "purpose", "value": "Identification", "type": "text" },
+                { "key": "isPrimary", "value": "true", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/asset-images?assetId={{assetId}}"
+          }
+        },
+        {
+          "name": "List Asset Images",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-images?relatedEntityId={{assetId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Lifecycle and relationship operations",
+      "item": [
+        {
+          "name": "Get Master Record",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types/{{recordId}}" }
+        },
+        {
+          "name": "Asset Type History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types/{{recordId}}/history" }
+        },
+        {
+          "name": "Asset Type Lookup",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-types/lookup?search=lap" }
+        },
+        {
+          "name": "Update Master Record",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Laptop Computer\",\"code\":\"LAPTOP\",\"requiresSerialNumber\":\"Yes\",\"defaultStatus\":\"Working\",\"active\":\"Yes\",\"moreInformation\":\"Yes\",\"numberingScheme\":\"LAP-#####\"}" },
+            "url": "{{baseUrl}}/api/asset-types/{{recordId}}"
+          }
+        },
+        {
+          "name": "Deactivate Master Record",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/asset-types/{{recordId}}" }
+        },
+        {
+          "name": "Restore Master Record",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/asset-types/{{recordId}}/restore" }
+        },
+        {
+          "name": "Get Type Attribute",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}" }
+        },
+        {
+          "name": "Assign Type Attribute",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"assetTypeId\":\"{{recordId}}\",\"customAttributeDefinitionId\":\"00000000-0000-0000-0000-000000000000\",\"requirement\":\"Optional\",\"displayOrder\":1,\"showInList\":true}" },
+            "url": "{{baseUrl}}/api/asset-type-attributes"
+          }
+        },
+        {
+          "name": "Create and Assign Type Attribute Definition",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"code\":\"memory_gb\",\"label\":\"Memory\",\"dataType\":\"Number\",\"unit\":\"GB\",\"requirement\":\"Recommended\",\"displayOrder\":1,\"showInList\":true}" },
+            "url": "{{baseUrl}}/api/asset-types/{{recordId}}/attributes"
+          }
+        },
+        {
+          "name": "Update Type Attribute",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"assetTypeId\":\"{{recordId}}\",\"customAttributeDefinitionId\":\"00000000-0000-0000-0000-000000000000\",\"requirement\":\"Required\",\"displayOrder\":1,\"showInList\":true}" },
+            "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}"
+          }
+        },
+        {
+          "name": "Deactivate Type Attribute",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}" }
+        },
+        {
+          "name": "Restore Type Attribute",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}/restore" }
+        },
+        {
+          "name": "Get Allowed Status Transitions",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-statuses/{{statusId}}/allowed-transitions" }
+        },
+        {
+          "name": "Set Allowed Status Transitions",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"allowedToStatusIds\":[]}" },
+            "url": "{{baseUrl}}/api/asset-statuses/{{statusId}}/allowed-transitions"
+          }
+        },
+        {
+          "name": "RFID Existence Check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rfid-tags/exists?value=EPC:3034-DEMO-001" }
+        },
+        {
+          "name": "Get RFID Tag",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}" }
+        },
+        {
+          "name": "Assign RFID Tag",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"assetId\":\"{{assetId}}\"}" },
+            "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}/assign"
+          }
+        },
+        {
+          "name": "Unassign RFID Tag",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}/unassign" }
+        },
+        {
+          "name": "Replace RFID Tag",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"replacementId\":\"{{replacementId}}\"}" },
+            "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}/replace"
+          }
+        },
+        {
+          "name": "Deactivate and Restore RFID Tag",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}" }
+        },
+        {
+          "name": "Restore RFID Tag",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}/restore" }
+        },
+        {
+          "name": "Barcode Existence Check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/barcodes/exists?value=AST-0001" }
+        },
+        {
+          "name": "Get Barcode",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/barcodes/{{identifierId}}" }
+        },
+        {
+          "name": "Assign Barcode",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"assetId\":\"{{assetId}}\"}" },
+            "url": "{{baseUrl}}/api/barcodes/{{identifierId}}/assign"
+          }
+        },
+        {
+          "name": "Unassign Barcode",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/barcodes/{{identifierId}}/unassign" }
+        },
+        {
+          "name": "Replace Barcode",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"replacementId\":\"{{replacementId}}\"}" },
+            "url": "{{baseUrl}}/api/barcodes/{{identifierId}}/replace"
+          }
+        },
+        {
+          "name": "Deactivate Barcode",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/barcodes/{{identifierId}}" }
+        },
+        {
+          "name": "Restore Barcode",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/barcodes/{{identifierId}}/restore" }
+        },
+        {
+          "name": "Get Image Metadata",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-images/{{imageId}}" }
+        },
+        {
+          "name": "Get Image Content",
+          "auth": { "type": "noauth" },
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-images/{{imageId}}/content" }
+        },
+        {
+          "name": "Update Image Metadata",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"caption\":\"Front view\",\"purpose\":\"Identification\"}" },
+            "url": "{{baseUrl}}/api/asset-images/{{imageId}}"
+          }
+        },
+        {
+          "name": "Set Primary Image",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/asset-images/{{imageId}}/primary" }
+        },
+        {
+          "name": "Delete Image",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/asset-images/{{imageId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "auth": { "type": "noauth" },
+      "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+    }
+  ]
+}

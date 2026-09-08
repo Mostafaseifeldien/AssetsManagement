@@ -1,0 +1,44 @@
+# Frontend integration: pull the backend API from Docker Hub and run it with SQL Server.
+# API: http://localhost:5288  Swagger: http://localhost:5288/swagger
+# CORS allows http://localhost:4200
+# Login: admin / Admin@123
+#
+# Usage: docker compose up -d
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "AssetsMgmt_123!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"AssetsMgmt_123!\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  api:
+    image: mostafaseifeldien/assetsmanagement-api:latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    ports:
+      - "5288:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=AssetsManagementDb;User Id=sa;Password=AssetsMgmt_123!;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      Jwt__Issuer: AssetsManagement
+      Jwt__Audience: AssetsManagement.Client
+      Jwt__SigningKey: "DOCKER-INTEGRATION-CHANGE-ME-assets-management-signing-key"
+      Jwt__ExpiryMinutes: "60"
+      Database__SeedOnStartup: "true"
+      Cors__AllowedOrigins__0: "http://localhost:4200"
+    restart: unless-stopped
+
+volumes:
+  sql-data:
