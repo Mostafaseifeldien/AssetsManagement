@@ -13,4 +13,5 @@ public sealed class RfidTag : AuditableEntity
     public Guid? ReplacedById { get; set; }
     public RfidTag? ReplacedBy { get; set; }
     public DateTime? RetiredAtUtc { get; set; }
+    public bool MoreInformation { get; set; }
 }

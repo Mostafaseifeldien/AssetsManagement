@@ -24,7 +24,7 @@ public sealed class ValidationTests
         var result = new RfidTagRequestValidator().Validate(new RfidTagRequest
         {
             TagIdentifier = "EPC:3034-ABC_100", TagType = "Passive UHF",
-            EncodingStandard = "GS1 SGTIN", Status = "Unassigned"
+            EncodingStandard = "GS1 SGTIN", Status = "Unassigned", MoreInformation = false
         });
 
         Assert.True(result.IsValid);
@@ -42,6 +42,7 @@ public sealed class ValidationTests
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.TagIdentifier));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.TagType));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.Status));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.MoreInformation));
     }
 
     [Fact]
@@ -49,7 +50,8 @@ public sealed class ValidationTests
     {
         var result = new RfidTagRequestValidator().Validate(new RfidTagRequest
         {
-            TagIdentifier = "E280:6894:100343", TagType = "Passive UHF", Status = "Unassigned"
+            TagIdentifier = "E280:6894:100343", TagType = "Passive UHF", Status = "Unassigned",
+            MoreInformation = false
         });
 
         Assert.True(result.IsValid);
@@ -60,7 +62,8 @@ public sealed class ValidationTests
     {
         var result = new RfidTagRequestValidator().Validate(new RfidTagRequest
         {
-            TagIdentifier = "E280:6894:100343", TagType = "Active", Status = "Assigned"
+            TagIdentifier = "E280:6894:100343", TagType = "Active", Status = "Assigned",
+            MoreInformation = false
         });
 
         Assert.False(result.IsValid);

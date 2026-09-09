@@ -22,6 +22,7 @@ public sealed class RfidTagRequest
     public string? EncodingStandard { get; init; }
     public string? Status { get; init; }
     public string? Asset { get; init; }
+    public bool? MoreInformation { get; init; }
 }
 
 public sealed record RfidTagListItemDto(
@@ -29,7 +30,8 @@ public sealed record RfidTagListItemDto(
     string TagIdentifier,
     string TagType,
     string? EncodingStandard,
-    string Status);
+    string Status,
+    bool MoreInformation);
 
 public sealed record RfidTagDetailDto(
     Guid Id,
@@ -37,6 +39,7 @@ public sealed record RfidTagDetailDto(
     string TagType,
     string? EncodingStandard,
     string Status,
+    bool MoreInformation,
     string? Asset,
     DateTime? EncodedAt,
     string? EncodedBy,
@@ -103,6 +106,7 @@ public sealed class RfidTagRequestValidator : AbstractValidator<RfidTagRequest>
             .WithMessage("Encoding standard must be GS1 SGTIN, Custom or Other.");
         RuleFor(x => x.Status).NotEmpty().Must(x => Statuses.Contains(x!))
             .WithMessage("Status must be Unassigned, Assigned, Damaged, Replaced or Retired.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
         RuleFor(x => x.Asset).NotEmpty()
             .When(x => string.Equals(x.Status, "Assigned", StringComparison.OrdinalIgnoreCase))
             .WithMessage("Asset is required when the tag is assigned.");

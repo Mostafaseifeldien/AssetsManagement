@@ -881,6 +881,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
+
                     b.Property<string>("EncodingStandard")
                         .IsRequired()
                         .HasMaxLength(50)

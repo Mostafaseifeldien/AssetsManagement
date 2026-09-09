@@ -66,7 +66,7 @@ public sealed class RfidTagService(
             .Select(x => new RfidTagListItemDto(
                 x.Id, x.TagIdentifier, x.TagType,
                 string.IsNullOrWhiteSpace(x.EncodingStandard) ? null : x.EncodingStandard,
-                x.Status.ToString()))
+                x.Status.ToString(), x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         return Page(rows, query, total);
     }
@@ -290,6 +290,7 @@ public sealed class RfidTagService(
         entity.TagIdentifier = request.TagIdentifier.Trim();
         entity.TagType = request.TagType.Trim();
         entity.EncodingStandard = NullIfEmpty(request.EncodingStandard) ?? "";
+        entity.MoreInformation = request.MoreInformation == true;
         entity.Status = status;
         if (status == IdentifierStatus.Unassigned)
         {
@@ -362,7 +363,7 @@ public sealed class RfidTagService(
     private RfidTagDetailDto MapDetail(RfidTag entity) =>
         new(entity.Id, entity.TagIdentifier, entity.TagType,
             string.IsNullOrWhiteSpace(entity.EncodingStandard) ? null : entity.EncodingStandard,
-            entity.Status.ToString(), entity.Asset?.Name, entity.EncodedAtUtc, entity.EncodedBy,
+            entity.Status.ToString(), entity.MoreInformation, entity.Asset?.Name, entity.EncodedAtUtc, entity.EncodedBy,
             entity.ReplacedBy?.TagIdentifier, entity.RetiredAtUtc, Lifecycle);
 
     private static PagedResult<T> Page<T>(IReadOnlyCollection<T> rows, RfidTagListQuery query, int total)

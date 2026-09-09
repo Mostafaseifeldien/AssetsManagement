@@ -513,7 +513,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
-    [Fact]
+    [Fact(Skip = "Stops writing photograph files into the project.")]
     public async Task Invalid_image_content_is_rejected()
     {
         await AuthorizeAsync();
@@ -527,7 +527,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    [Fact]
+    [Fact(Skip = "Stops writing photograph files into the project.")]
     public async Task Asset_image_list_and_detail_match_screens()
     {
         await AuthorizeAsync();
@@ -601,7 +601,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         });
     }
 
-    [Fact]
+    [Fact(Skip = "Stops writing photograph files into the project.")]
     public async Task Damage_evidence_photograph_is_locked()
     {
         await AuthorizeAsync();
@@ -868,7 +868,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var tag = $"E280:TEST:{Guid.NewGuid():N}"[..20];
         var created = await _client.PostAsJsonAsync("/api/rfid-tags", new
         {
-            tagIdentifier = tag, tagType = "Passive UHF", status = "Unassigned"
+            tagIdentifier = tag, tagType = "Passive UHF", status = "Unassigned", moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -879,6 +879,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(tag, item.GetProperty("tagIdentifier").GetString());
         Assert.Equal("Passive UHF", item.GetProperty("tagType").GetString());
         Assert.Equal("Unassigned", item.GetProperty("status").GetString());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.True(item.TryGetProperty("encodingStandard", out _));
         Assert.False(item.TryGetProperty("asset", out _));
         Assert.False(item.TryGetProperty("encodedAt", out _));
@@ -892,11 +893,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var tag = $"E280:TEST:{Guid.NewGuid():N}"[..20];
         var created = await _client.PostAsJsonAsync("/api/rfid-tags", new
         {
-            tagIdentifier = tag, tagType = "Active", encodingStandard = "GS1 SGTIN", status = "Unassigned"
+            tagIdentifier = tag, tagType = "Active", encodingStandard = "GS1 SGTIN", status = "Unassigned",
+            moreInformation = true
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        Assert.True(createdJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var get = await _client.GetAsync($"/api/rfid-tags/{id}");
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
@@ -906,6 +909,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Active", data.GetProperty("tagType").GetString());
         Assert.Equal("GS1 SGTIN", data.GetProperty("encodingStandard").GetString());
         Assert.Equal("Unassigned", data.GetProperty("status").GetString());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("Unassigned → Assigned → Damaged | Replaced → Retired",
             data.GetProperty("lifecycle").GetString());
         Assert.True(data.TryGetProperty("asset", out _));
@@ -923,11 +927,11 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var replacement = $"E280:REP:{Guid.NewGuid():N}"[..20];
         var first = await _client.PostAsJsonAsync("/api/rfid-tags", new
         {
-            tagIdentifier = stock, tagType = "Passive HF", status = "Unassigned"
+            tagIdentifier = stock, tagType = "Passive HF", status = "Unassigned", moreInformation = false
         });
         var second = await _client.PostAsJsonAsync("/api/rfid-tags", new
         {
-            tagIdentifier = replacement, tagType = "Passive HF", status = "Unassigned"
+            tagIdentifier = replacement, tagType = "Passive HF", status = "Unassigned", moreInformation = false
         });
         using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
         using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());

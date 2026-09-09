@@ -137,6 +137,9 @@ public static class DataSeeder
             IF COL_LENGTH(N'dbo.Manufacturers', N'MoreInformation') IS NULL
                 ALTER TABLE [dbo].[Manufacturers] ADD [MoreInformation] bit NOT NULL
                     CONSTRAINT [DF_Manufacturers_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.RfidTags', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[RfidTags] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_RfidTags_MoreInformation] DEFAULT(0);
             """, cancellationToken);
     }
 
