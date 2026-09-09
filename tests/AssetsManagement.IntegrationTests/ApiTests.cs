@@ -394,6 +394,104 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Asset_image_list_and_detail_match_screens()
+    {
+        await AuthorizeAsync();
+        using var lookup = JsonDocument.Parse(await _client.GetStringAsync("/api/assets/lookup"));
+        var asset = lookup.RootElement.GetProperty("data")[0];
+        var assetId = asset.GetProperty("id").GetGuid();
+        var assetName = asset.GetProperty("name").GetString();
+
+        using var multipart = Photograph("front.png", "Identification", "Yes", "Laptop 04405 — front");
+        var created = await _client.PostAsync($"/api/asset-images?assetId={assetId}", multipart);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var data = createdJson.RootElement.GetProperty("data");
+        var id = data.GetProperty("id").GetGuid();
+        Assert.Equal(assetName, data.GetProperty("asset").GetString());
+        Assert.Equal("front.png", data.GetProperty("file").GetString());
+        Assert.Equal("Yes", data.GetProperty("isPrimary").GetString());
+        Assert.Equal("Identification", data.GetProperty("purpose").GetString());
+        Assert.Equal("Laptop 04405 — front", data.GetProperty("caption").GetString());
+        Assert.Equal("Administrator", data.GetProperty("capturedBy").GetString());
+        Assert.False(data.GetProperty("isLocked").GetBoolean());
+        Assert.Equal($"/api/asset-images/{id}/content", data.GetProperty("contentUrl").GetString());
+        Assert.Equal("Active → Superseded → Deleted (soft)", data.GetProperty("lifecycle").GetString());
+
+        var content = await _client.GetAsync($"/api/asset-images/{id}/content");
+        Assert.Equal(HttpStatusCode.OK, content.StatusCode);
+        Assert.Equal("image/png", content.Content.Headers.ContentType?.MediaType);
+
+        using var nameplate = Photograph("plate.png", "Nameplate", "No", "Serial nameplate");
+        var second = await _client.PostAsync($"/api/asset-images?assetId={assetId}", nameplate);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        var secondId = secondJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        Assert.Equal("No", secondJson.RootElement.GetProperty("data").GetProperty("isPrimary").GetString());
+
+        var list = await _client.GetAsync($"/api/asset-images?asset={assetId}&purpose=Identification");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var listed = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = listed.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(assetName, item.GetProperty("asset").GetString());
+        Assert.Equal("front.png", item.GetProperty("file").GetString());
+        Assert.True(item.GetProperty("isPrimary").GetBoolean());
+        Assert.Equal("Identification", item.GetProperty("purpose").GetString());
+        Assert.False(item.TryGetProperty("caption", out _));
+        Assert.False(item.TryGetProperty("capturedBy", out _));
+        Assert.False(item.TryGetProperty("contentUrl", out _));
+
+        var makePrimary = await _client.PostAsync($"/api/asset-images/{secondId}/primary", new StringContent(""));
+        Assert.Equal(HttpStatusCode.OK, makePrimary.StatusCode);
+
+        var ignored = await _client.PutAsJsonAsync($"/api/asset-images/{secondId}", new
+        {
+            asset = assetName, isPrimary = "Yes", purpose = "Nameplate",
+            moreInformation = "No", caption = "ignored"
+        });
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+        using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
+        Assert.Equal("Serial nameplate", ignoredJson.RootElement.GetProperty("data").GetProperty("caption").GetString());
+
+        var history = await _client.GetAsync($"/api/asset-images/{id}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var historyJson = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        var entries = historyJson.RootElement.GetProperty("data").EnumerateArray().ToArray();
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Record created"));
+        Assert.All(entries, x =>
+        {
+            Assert.Equal("Administrator", x.GetProperty("by").GetString());
+            Assert.Equal("Screen", x.GetProperty("source").GetString());
+            Assert.True(x.TryGetProperty("when", out _));
+            Assert.False(x.TryGetProperty("field", out _));
+        });
+    }
+
+    [Fact]
+    public async Task Damage_evidence_photograph_is_locked()
+    {
+        await AuthorizeAsync();
+        using var lookup = JsonDocument.Parse(await _client.GetStringAsync("/api/assets/lookup"));
+        var assetId = lookup.RootElement.GetProperty("data")[0].GetProperty("id").GetGuid();
+        using var multipart = Photograph("damage.png", "Damage evidence", "No", "Crack on casing");
+        var created = await _client.PostAsync($"/api/asset-images?assetId={assetId}", multipart);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        Assert.True(createdJson.RootElement.GetProperty("data").GetProperty("isLocked").GetBoolean());
+
+        var update = await _client.PutAsJsonAsync($"/api/asset-images/{id}", new
+        {
+            asset = assetId.ToString(), isPrimary = "No", purpose = "Damage evidence",
+            moreInformation = "Yes", caption = "changed"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, update.StatusCode);
+
+        var delete = await _client.DeleteAsync($"/api/asset-images/{id}");
+        Assert.Equal(HttpStatusCode.Conflict, delete.StatusCode);
+    }
+
+    [Fact]
     public async Task Combined_type_attribute_workflow_creates_definition_and_assignment()
     {
         await AuthorizeAsync();
@@ -414,6 +512,402 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(code, json.RootElement.GetProperty("data").GetProperty("code").GetString());
         Assert.True(json.RootElement.GetProperty("data").GetProperty("showInList").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Rfid_tag_list_matches_prototype_columns()
+    {
+        await AuthorizeAsync();
+        var tag = $"E280:TEST:{Guid.NewGuid():N}"[..20];
+        var created = await _client.PostAsJsonAsync("/api/rfid-tags", new
+        {
+            tagIdentifier = tag, tagType = "Passive UHF", status = "Unassigned"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var list = await _client.GetAsync($"/api/rfid-tags?search={Uri.EscapeDataString(tag)}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var json = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = json.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(tag, item.GetProperty("tagIdentifier").GetString());
+        Assert.Equal("Passive UHF", item.GetProperty("tagType").GetString());
+        Assert.Equal("Unassigned", item.GetProperty("status").GetString());
+        Assert.True(item.TryGetProperty("encodingStandard", out _));
+        Assert.False(item.TryGetProperty("asset", out _));
+        Assert.False(item.TryGetProperty("encodedAt", out _));
+        Assert.False(item.TryGetProperty("lifecycle", out _));
+    }
+
+    [Fact]
+    public async Task Rfid_tag_detail_matches_new_rfid_tag_screen()
+    {
+        await AuthorizeAsync();
+        var tag = $"E280:TEST:{Guid.NewGuid():N}"[..20];
+        var created = await _client.PostAsJsonAsync("/api/rfid-tags", new
+        {
+            tagIdentifier = tag, tagType = "Active", encodingStandard = "GS1 SGTIN", status = "Unassigned"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var get = await _client.GetAsync($"/api/rfid-tags/{id}");
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        using var json = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        var data = json.RootElement.GetProperty("data");
+        Assert.Equal(tag, data.GetProperty("tagIdentifier").GetString());
+        Assert.Equal("Active", data.GetProperty("tagType").GetString());
+        Assert.Equal("GS1 SGTIN", data.GetProperty("encodingStandard").GetString());
+        Assert.Equal("Unassigned", data.GetProperty("status").GetString());
+        Assert.Equal("Unassigned → Assigned → Damaged | Replaced → Retired",
+            data.GetProperty("lifecycle").GetString());
+        Assert.True(data.TryGetProperty("asset", out _));
+        Assert.True(data.TryGetProperty("encodedAt", out _));
+        Assert.True(data.TryGetProperty("encodedBy", out _));
+        Assert.True(data.TryGetProperty("replacedBy", out _));
+        Assert.True(data.TryGetProperty("retiredAt", out _));
+    }
+
+    [Fact]
+    public async Task Rfid_tag_can_be_assigned_replaced_and_listed_in_stock()
+    {
+        await AuthorizeAsync();
+        var stock = $"E280:STK:{Guid.NewGuid():N}"[..20];
+        var replacement = $"E280:REP:{Guid.NewGuid():N}"[..20];
+        var first = await _client.PostAsJsonAsync("/api/rfid-tags", new
+        {
+            tagIdentifier = stock, tagType = "Passive HF", status = "Unassigned"
+        });
+        var second = await _client.PostAsJsonAsync("/api/rfid-tags", new
+        {
+            tagIdentifier = replacement, tagType = "Passive HF", status = "Unassigned"
+        });
+        using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        var firstId = firstJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        var secondId = secondJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var waiting = await _client.GetAsync("/api/rfid-tags/assets-waiting?search=Demo");
+        Assert.Equal(HttpStatusCode.OK, waiting.StatusCode);
+        using var waitingJson = JsonDocument.Parse(await waiting.Content.ReadAsStringAsync());
+        var asset = waitingJson.RootElement.GetProperty("data").GetProperty("items")[0];
+        var assetId = asset.GetProperty("id").GetGuid();
+        Assert.Equal("Demo Asset", asset.GetProperty("name").GetString());
+        Assert.True(asset.TryGetProperty("assetType", out _));
+
+        var assign = await _client.PostAsJsonAsync($"/api/rfid-tags/{firstId}/assign", new { assetId });
+        Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
+        using var assigned = JsonDocument.Parse(await assign.Content.ReadAsStringAsync());
+        Assert.Equal("Assigned", assigned.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal("Demo Asset", assigned.RootElement.GetProperty("data").GetProperty("asset").GetString());
+
+        var replace = await _client.PostAsJsonAsync($"/api/rfid-tags/{firstId}/replace", new { replacementId = secondId });
+        Assert.Equal(HttpStatusCode.OK, replace.StatusCode);
+        using var replaced = JsonDocument.Parse(await replace.Content.ReadAsStringAsync());
+        Assert.Equal("Assigned", replaced.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal(replacement, replaced.RootElement.GetProperty("data").GetProperty("tagIdentifier").GetString());
+
+        var old = await _client.GetAsync($"/api/rfid-tags/{firstId}");
+        using var oldJson = JsonDocument.Parse(await old.Content.ReadAsStringAsync());
+        Assert.Equal("Replaced", oldJson.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal(replacement, oldJson.RootElement.GetProperty("data").GetProperty("replacedBy").GetString());
+
+        var history = await _client.GetAsync($"/api/rfid-tags/{firstId}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var historyJson = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        Assert.True(historyJson.RootElement.GetProperty("data").GetArrayLength() > 0);
+        Assert.Equal("Screen", historyJson.RootElement.GetProperty("data")[0].GetProperty("source").GetString());
+
+        var unassignedStock = await _client.GetAsync("/api/rfid-tags?status=Unassigned");
+        using var stockJson = JsonDocument.Parse(await unassignedStock.Content.ReadAsStringAsync());
+        foreach (var item in stockJson.RootElement.GetProperty("data").GetProperty("items").EnumerateArray())
+            Assert.Equal("Unassigned", item.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Barcode_list_matches_prototype_columns()
+    {
+        await AuthorizeAsync();
+        var value = $"BC-{Guid.NewGuid():N}"[..12];
+        var created = await _client.PostAsJsonAsync("/api/barcodes", new
+        {
+            value, symbology = "Code128", status = "Unassigned"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var list = await _client.GetAsync($"/api/barcodes?search={Uri.EscapeDataString(value)}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var json = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = json.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(value, item.GetProperty("value").GetString());
+        Assert.Equal("Code128", item.GetProperty("symbology").GetString());
+        Assert.Equal("Unassigned", item.GetProperty("status").GetString());
+        Assert.False(item.TryGetProperty("subjectReference", out _));
+        Assert.False(item.TryGetProperty("printedAt", out _));
+        Assert.False(item.TryGetProperty("lifecycle", out _));
+    }
+
+    [Fact]
+    public async Task Barcode_detail_matches_new_barcode_screen()
+    {
+        await AuthorizeAsync();
+        var value = $"BC-{Guid.NewGuid():N}"[..12];
+        var created = await _client.PostAsJsonAsync("/api/barcodes", new
+        {
+            value, symbology = "DataMatrix", status = "Unassigned"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var get = await _client.GetAsync($"/api/barcodes/{id}");
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        using var json = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        var data = json.RootElement.GetProperty("data");
+        Assert.Equal(value, data.GetProperty("value").GetString());
+        Assert.Equal("DataMatrix", data.GetProperty("symbology").GetString());
+        Assert.Equal("Unassigned", data.GetProperty("status").GetString());
+        Assert.Equal("Unassigned → Assigned → Replaced → Retired", data.GetProperty("lifecycle").GetString());
+        Assert.True(data.TryGetProperty("subjectReference", out _));
+        Assert.True(data.TryGetProperty("printedAt", out _));
+        Assert.True(data.TryGetProperty("replacedBy", out _));
+        Assert.False(data.TryGetProperty("encodedBy", out _));
+    }
+
+    [Fact]
+    public async Task Barcode_can_be_assigned_replaced_and_listed_in_stock()
+    {
+        await AuthorizeAsync();
+        var stock = $"BC-{Guid.NewGuid():N}"[..12];
+        var replacement = $"BC-{Guid.NewGuid():N}"[..12];
+        var first = await _client.PostAsJsonAsync("/api/barcodes", new
+        {
+            value = stock, symbology = "QR", status = "Unassigned"
+        });
+        var second = await _client.PostAsJsonAsync("/api/barcodes", new
+        {
+            value = replacement, symbology = "QR", status = "Unassigned"
+        });
+        using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        var firstId = firstJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        var secondId = secondJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var waiting = await _client.GetAsync("/api/barcodes/assets-waiting?search=Demo");
+        Assert.Equal(HttpStatusCode.OK, waiting.StatusCode);
+        using var waitingJson = JsonDocument.Parse(await waiting.Content.ReadAsStringAsync());
+        var asset = waitingJson.RootElement.GetProperty("data").GetProperty("items")[0];
+        var assetId = asset.GetProperty("id").GetGuid();
+        Assert.Equal("Demo Asset", asset.GetProperty("name").GetString());
+
+        var assign = await _client.PostAsJsonAsync($"/api/barcodes/{firstId}/assign", new { assetId });
+        Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
+        using var assigned = JsonDocument.Parse(await assign.Content.ReadAsStringAsync());
+        Assert.Equal("Assigned", assigned.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal("Demo Asset", assigned.RootElement.GetProperty("data").GetProperty("subjectReference").GetString());
+
+        var replace = await _client.PostAsJsonAsync($"/api/barcodes/{firstId}/replace", new { replacementId = secondId });
+        Assert.Equal(HttpStatusCode.OK, replace.StatusCode);
+
+        var old = await _client.GetAsync($"/api/barcodes/{firstId}");
+        using var oldJson = JsonDocument.Parse(await old.Content.ReadAsStringAsync());
+        Assert.Equal("Replaced", oldJson.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal(replacement, oldJson.RootElement.GetProperty("data").GetProperty("replacedBy").GetString());
+
+        var history = await _client.GetAsync($"/api/barcodes/{firstId}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var historyJson = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        Assert.True(historyJson.RootElement.GetProperty("data").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task Asset_status_list_returns_screen_columns()
+    {
+        await AuthorizeAsync();
+        var code = $"ST{Guid.NewGuid():N}"[..10];
+        var created = await _client.PostAsJsonAsync("/api/asset-statuses", ValidAssetStatus(code));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var list = await _client.GetAsync($"/api/asset-statuses?search={code}&statusCategory=Working");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var json = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = json.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(code, item.GetProperty("code").GetString());
+        Assert.Equal("Working", item.GetProperty("statusCategory").GetString());
+        Assert.Equal("#16a34a", item.GetProperty("color").GetString());
+        Assert.True(item.GetProperty("isOperational").GetBoolean());
+        Assert.False(item.GetProperty("isTerminal").GetBoolean());
+        Assert.False(item.TryGetProperty("alternateName", out _));
+        Assert.False(item.TryGetProperty("blocksMovement", out _));
+        Assert.False(item.TryGetProperty("active", out _));
+        Assert.False(item.TryGetProperty("sortOrder", out _));
+    }
+
+    [Fact]
+    public async Task Asset_status_detail_history_and_transitions_match_screens()
+    {
+        await AuthorizeAsync();
+        var code = $"ST{Guid.NewGuid():N}"[..10];
+        var name = $"Hold {Guid.NewGuid():N}"[..18];
+        var created = await _client.PostAsJsonAsync("/api/asset-statuses", new
+        {
+            code, name, statusCategory = "In Maintenance", color = "#f59e0b",
+            isOperational = "No", isTerminal = "No", blocksMovement = "Yes",
+            active = "Yes", moreInformation = "Yes", alternateName = "موقوف"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var data = createdJson.RootElement.GetProperty("data");
+        var id = data.GetProperty("id").GetGuid();
+        Assert.Equal("In Maintenance", data.GetProperty("statusCategory").GetString());
+        Assert.Equal("#f59e0b", data.GetProperty("color").GetString());
+        Assert.Equal("No", data.GetProperty("isOperational").GetString());
+        Assert.Equal("No", data.GetProperty("isTerminal").GetString());
+        Assert.Equal("Yes", data.GetProperty("blocksMovement").GetString());
+        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.Equal("موقوف", data.GetProperty("alternateName").GetString());
+        Assert.True(data.GetProperty("sortOrder").GetInt32() > 0);
+        Assert.Equal("Active → Inactive. Never deleted while referenced by history.",
+            data.GetProperty("lifecycle").GetString());
+
+        var ignored = await _client.PutAsJsonAsync($"/api/asset-statuses/{id}", new
+        {
+            code, name, statusCategory = "In Maintenance", color = "#f59e0b",
+            isOperational = "No", isTerminal = "No", blocksMovement = "Yes",
+            active = "Yes", moreInformation = "No", alternateName = "ignored"
+        });
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+        using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
+        Assert.Equal("موقوف", ignoredJson.RootElement.GetProperty("data").GetProperty("alternateName").GetString());
+
+        var lookup = await _client.GetAsync("/api/asset-statuses/lookup?search=Working");
+        using var lookupJson = JsonDocument.Parse(await lookup.Content.ReadAsStringAsync());
+        var workingId = lookupJson.RootElement.GetProperty("data").EnumerateArray()
+            .First(x => x.GetProperty("code").GetString() == "WRK").GetProperty("id").GetGuid();
+
+        var transitions = await _client.PutAsJsonAsync($"/api/asset-statuses/{id}/allowed-transitions",
+            new { allowedToStatusIds = new[] { workingId } });
+        Assert.Equal(HttpStatusCode.OK, transitions.StatusCode);
+        using var transitionJson = JsonDocument.Parse(await transitions.Content.ReadAsStringAsync());
+        Assert.Equal("WRK", transitionJson.RootElement.GetProperty("data")[0].GetProperty("code").GetString());
+
+        var self = await _client.PutAsJsonAsync($"/api/asset-statuses/{id}/allowed-transitions",
+            new { allowedToStatusIds = new[] { id } });
+        Assert.Equal(HttpStatusCode.Conflict, self.StatusCode);
+
+        var disposedLookup = await _client.GetAsync("/api/asset-statuses/lookup?search=Disposed");
+        using var disposedJson = JsonDocument.Parse(await disposedLookup.Content.ReadAsStringAsync());
+        var disposedId = disposedJson.RootElement.GetProperty("data").EnumerateArray()
+            .First(x => x.GetProperty("code").GetString() == "DSP").GetProperty("id").GetGuid();
+        var terminal = await _client.PutAsJsonAsync($"/api/asset-statuses/{disposedId}/allowed-transitions",
+            new { allowedToStatusIds = new[] { workingId } });
+        Assert.Equal(HttpStatusCode.Conflict, terminal.StatusCode);
+
+        var history = await _client.GetAsync($"/api/asset-statuses/{id}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var json = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        var entries = json.RootElement.GetProperty("data").EnumerateArray().ToArray();
+        Assert.NotEmpty(entries);
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Record created"));
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Allowed transitions"));
+        Assert.All(entries, x =>
+        {
+            Assert.Equal("Administrator", x.GetProperty("by").GetString());
+            Assert.Equal("Screen", x.GetProperty("source").GetString());
+            Assert.True(x.TryGetProperty("when", out _));
+            Assert.True(x.TryGetProperty("change", out _));
+            Assert.False(x.TryGetProperty("field", out _));
+        });
+    }
+
+    [Fact]
+    public async Task Supplier_list_returns_screen_columns()
+    {
+        await AuthorizeAsync();
+        var code = $"SUP{Guid.NewGuid():N}"[..10];
+        var created = await _client.PostAsJsonAsync("/api/suppliers", new
+        {
+            code, name = "Delta Technology Distribution",
+            supplierKind = "Vendor", contactPerson = "H. Farouk",
+            telephone = "+20 2 2735 4410", email = "sales@deltatech.example",
+            country = "Egypt", active = "Yes", moreInformation = "No"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var list = await _client.GetAsync($"/api/suppliers?search={code}&supplierKind=Vendor");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var json = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = json.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(code, item.GetProperty("code").GetString());
+        Assert.Equal("Delta Technology Distribution", item.GetProperty("name").GetString());
+        Assert.Equal("Vendor", item.GetProperty("supplierKind").GetString());
+        Assert.Equal("H. Farouk", item.GetProperty("contactPerson").GetString());
+        Assert.Equal("+20 2 2735 4410", item.GetProperty("telephone").GetString());
+        Assert.Equal("sales@deltatech.example", item.GetProperty("email").GetString());
+        Assert.False(item.TryGetProperty("alternateName", out _));
+        Assert.False(item.TryGetProperty("taxRegistration", out _));
+        Assert.False(item.TryGetProperty("address", out _));
+        Assert.False(item.TryGetProperty("country", out _));
+        Assert.False(item.TryGetProperty("rating", out _));
+        Assert.False(item.TryGetProperty("active", out _));
+    }
+
+    [Fact]
+    public async Task Supplier_detail_and_history_match_screens()
+    {
+        await AuthorizeAsync();
+        var code = $"SUP{Guid.NewGuid():N}"[..10];
+        var created = await _client.PostAsJsonAsync("/api/suppliers", new
+        {
+            code, name = "Nile Office Systems",
+            supplierKind = "Both", contactPerson = "M. Adly",
+            telephone = "+20 2 2419 7782", email = "info@nileoffice.example",
+            country = "Egypt", active = "Yes", moreInformation = "Yes",
+            alternateName = "النيل لأنظمة المكاتب", taxRegistration = $"TAX{Guid.NewGuid():N}"[..12],
+            paymentTerms = "45 days net", rating = "Approved", externalIdentifier = $"ODOO-{Guid.NewGuid():N}"[..12]
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var data = createdJson.RootElement.GetProperty("data");
+        var id = data.GetProperty("id").GetGuid();
+        Assert.Equal("Both", data.GetProperty("supplierKind").GetString());
+        Assert.Equal("M. Adly", data.GetProperty("contactPerson").GetString());
+        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.Equal("النيل لأنظمة المكاتب", data.GetProperty("alternateName").GetString());
+        Assert.Equal("Approved", data.GetProperty("rating").GetString());
+        Assert.Equal("Draft → Active → Under review → Blocked → Archived",
+            data.GetProperty("lifecycle").GetString());
+
+        var ignored = await _client.PutAsJsonAsync($"/api/suppliers/{id}", new
+        {
+            code, name = "Nile Office Systems",
+            supplierKind = "Both", contactPerson = "M. Adly",
+            telephone = "+20 2 2419 7782", email = "info@nileoffice.example",
+            country = "United Arab Emirates", active = "Yes", moreInformation = "No",
+            alternateName = "ignored", rating = "Blocked"
+        });
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+        using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
+        var updated = ignoredJson.RootElement.GetProperty("data");
+        Assert.Equal("United Arab Emirates", updated.GetProperty("country").GetString());
+        Assert.Equal("النيل لأنظمة المكاتب", updated.GetProperty("alternateName").GetString());
+        Assert.Equal("Approved", updated.GetProperty("rating").GetString());
+
+        var history = await _client.GetAsync($"/api/suppliers/{id}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var json = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        var entries = json.RootElement.GetProperty("data").EnumerateArray().ToArray();
+        Assert.NotEmpty(entries);
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Record created"));
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Country"));
+        Assert.All(entries, x =>
+        {
+            Assert.Equal("Administrator", x.GetProperty("by").GetString());
+            Assert.Equal("Screen", x.GetProperty("source").GetString());
+            Assert.True(x.TryGetProperty("when", out _));
+            Assert.True(x.TryGetProperty("change", out _));
+            Assert.False(x.TryGetProperty("field", out _));
+        });
     }
 
     private async Task AuthorizeAsync()
@@ -440,4 +934,25 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         name = $"Name {code}", code, requiresSerialNumber = "No",
         active = "Yes", moreInformation = "No"
     };
+
+    private static object ValidAssetStatus(string code) => new
+    {
+        code, name = $"Name {code}", statusCategory = "Working", color = "#16a34a",
+        isOperational = "Yes", isTerminal = "No", blocksMovement = "No",
+        active = "Yes", moreInformation = "No"
+    };
+
+    private static MultipartFormDataContent Photograph(
+        string fileName, string purpose, string isPrimary, string caption)
+    {
+        var multipart = new MultipartFormDataContent();
+        var bytes = new ByteArrayContent(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+        bytes.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        multipart.Add(bytes, "file", fileName);
+        multipart.Add(new StringContent(purpose), "purpose");
+        multipart.Add(new StringContent(isPrimary), "isPrimary");
+        multipart.Add(new StringContent(caption), "caption");
+        return multipart;
+    }
 }

@@ -7,16 +7,16 @@ namespace AssetsManagement.Api.Controllers;
 public sealed class ImageUploadRequest
 {
     public required IFormFile File { get; init; }
-    public string? Caption { get; init; }
+    public string? Asset { get; init; }
+    public string? IsPrimary { get; init; }
     public string? Purpose { get; init; }
-    public bool IsPrimary { get; init; }
+    public string? MoreInformation { get; init; }
+    public string? Caption { get; init; }
 }
-
-public sealed record ImageMetadataRequest(string? Caption, string? Purpose);
 
 [ApiController]
 [Route("api/asset-images")]
-public sealed class AssetImagesController(IAssetDataService service) : ControllerBase
+public sealed class AssetImagesController(IAssetImageService service) : ControllerBase
 {
     private const long MaximumImageSize = 10 * 1024 * 1024;
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
@@ -25,18 +25,28 @@ public sealed class AssetImagesController(IAssetDataService service) : Controlle
         { "image/jpeg", "image/png", "image/webp" };
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResult<AssetImageDto>>>> List(
-        [FromQuery] ListQuery query, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<PagedResult<AssetImageDto>>.Ok(await service.ListImagesAsync(query, cancellationToken)));
+    [ProducesResponseType(typeof(ApiResponse<PagedResult<AssetImageListItemDto>>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<PagedResult<AssetImageListItemDto>>>> List(
+        [FromQuery] AssetImageListQuery query, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<PagedResult<AssetImageListItemDto>>.Ok(
+            await service.ListAsync(query, cancellationToken)));
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ApiResponse<AssetImageDto>>> Get(Guid id, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<AssetImageDto>.Ok(await service.GetImageAsync(id, cancellationToken)));
+    public async Task<ActionResult<ApiResponse<AssetImageDetailDto>>> Get(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetImageDetailDto>.Ok(
+            await service.GetAsync(id, cancellationToken), "Record retrieved successfully."));
+
+    [HttpGet("{id:guid}/history")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyCollection<AssetImageHistoryDto>>>> History(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<IReadOnlyCollection<AssetImageHistoryDto>>.Ok(
+            await service.GetHistoryAsync(id, cancellationToken), "History retrieved successfully."));
 
     [HttpGet("{id:guid}/content")]
     public async Task<IActionResult> Content(Guid id, CancellationToken cancellationToken)
     {
-        var file = await service.OpenImageAsync(id, cancellationToken);
+        var file = await service.OpenAsync(id, cancellationToken);
         return File(file.Content, file.ContentType, enableRangeProcessing: true);
     }
 
@@ -44,42 +54,61 @@ public sealed class AssetImagesController(IAssetDataService service) : Controlle
     [Authorize(Roles = "Admin")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaximumImageSize)]
-    public async Task<ActionResult<ApiResponse<AssetImageDto>>> Upload(
-        [FromQuery] Guid assetId, [FromForm] ImageUploadRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<AssetImageDetailDto>>> Create(
+        [FromQuery] Guid? assetId, [FromForm] ImageUploadRequest request, CancellationToken cancellationToken)
     {
         await ValidateImageAsync(request.File, cancellationToken);
         await using var stream = request.File.OpenReadStream();
-        var result = await service.UploadImageAsync(assetId, new ImageUpload
+        var result = await service.CreateAsync(new AssetImageCreateRequest
         {
-            Content = stream, OriginalFileName = Path.GetFileName(request.File.FileName),
-            ContentType = request.File.ContentType, SizeBytes = request.File.Length,
-            Caption = request.Caption, Purpose = request.Purpose, IsPrimary = request.IsPrimary
+            Asset = FirstNonEmpty(request.Asset, assetId?.ToString()),
+            IsPrimary = request.IsPrimary,
+            Purpose = request.Purpose,
+            MoreInformation = request.MoreInformation,
+            Caption = request.Caption
+        }, new ImageUpload
+        {
+            Content = stream,
+            OriginalFileName = Path.GetFileName(request.File.FileName),
+            ContentType = request.File.ContentType,
+            SizeBytes = request.File.Length
         }, cancellationToken);
-        return Created($"/api/asset-images/{result.Id}",
-            ApiResponse<AssetImageDto>.Ok(result, "Image uploaded successfully."));
+        return CreatedAtAction(nameof(Get), new { id = result.Id },
+            ApiResponse<AssetImageDetailDto>.Ok(result, "Photograph added to the asset."));
     }
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ApiResponse<AssetImageDto>>> Update(
-        Guid id, ImageMetadataRequest request, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<AssetImageDto>.Ok(
-            await service.UpdateImageAsync(id, request.Caption, request.Purpose, cancellationToken),
-            "Image metadata updated successfully."));
+    public async Task<ActionResult<ApiResponse<AssetImageDetailDto>>> Update(
+        Guid id, AssetImageRequest request, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetImageDetailDto>.Ok(
+            await service.UpdateAsync(id, request, cancellationToken), "Record updated successfully."));
 
     [HttpPost("{id:guid}/primary")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ApiResponse<AssetImageDto>>> SetPrimary(Guid id, CancellationToken cancellationToken) =>
-        Ok(ApiResponse<AssetImageDto>.Ok(await service.SetPrimaryImageAsync(id, cancellationToken),
+    public async Task<ActionResult<ApiResponse<AssetImageDetailDto>>> SetPrimary(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetImageDetailDto>.Ok(
+            await service.SetPrimaryAsync(id, cancellationToken),
             "Primary image selected successfully."));
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
-        await service.DeleteImageAsync(id, cancellationToken);
+        await service.DeactivateAsync(id, cancellationToken);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/restore")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<AssetImageDetailDto>>> Restore(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetImageDetailDto>.Ok(
+            await service.RestoreAsync(id, cancellationToken), "Record restored successfully."));
+
+    private static string? FirstNonEmpty(string? value, string? fallback) =>
+        !string.IsNullOrWhiteSpace(value) ? value : fallback;
 
     private static async Task ValidateImageAsync(IFormFile file, CancellationToken cancellationToken)
     {

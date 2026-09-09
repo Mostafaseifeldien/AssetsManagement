@@ -23,6 +23,7 @@ public sealed class DomainRuleTests
     [InlineData(IdentifierStatus.Assigned)]
     [InlineData(IdentifierStatus.Retired)]
     [InlineData(IdentifierStatus.Damaged)]
+    [InlineData(IdentifierStatus.Replaced)]
     public void Only_in_stock_identifier_can_be_assigned(IdentifierStatus status)
     {
         Assert.Throws<DomainRuleException>(() => AssetDataRules.EnsureIdentifierCanBeAssigned(status, null));

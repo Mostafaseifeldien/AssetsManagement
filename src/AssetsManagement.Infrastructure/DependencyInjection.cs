@@ -20,6 +20,11 @@ public static class InfrastructureRegistration
         services.AddScoped<IManufacturerService, ManufacturerService>();
         services.AddScoped<IAssetTypeService, AssetTypeService>();
         services.AddScoped<IAssetModelService, AssetModelService>();
+        services.AddScoped<IRfidTagService, RfidTagService>();
+        services.AddScoped<IBarcodeService, BarcodeService>();
+        services.AddScoped<IAssetStatusService, AssetStatusService>();
+        services.AddScoped<ISupplierService, SupplierService>();
+        services.AddScoped<IAssetImageService, AssetImageService>();
         services.AddDbContext<AssetsDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddIdentityCore<ApplicationUser>(options =>

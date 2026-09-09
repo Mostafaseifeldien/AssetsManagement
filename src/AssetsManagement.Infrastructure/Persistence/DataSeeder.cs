@@ -34,9 +34,9 @@ public static class DataSeeder
             db.AssetStatuses.AddRange(
                 new AssetStatus { Code = "WRK", Name = "Working", StatusCategory = "Working", Color = "#16a34a", IsOperational = true, DisplayOrder = 1 },
                 new AssetStatus { Code = "DMG", Name = "Damaged", StatusCategory = "Damaged", Color = "#dc2626", BlocksMovement = true, DisplayOrder = 2 },
-                new AssetStatus { Code = "MNT", Name = "In Maintenance", StatusCategory = "In Maintenance", Color = "#f59e0b", DisplayOrder = 3 },
+                new AssetStatus { Code = "MNT", Name = "In Maintenance", StatusCategory = "In Maintenance", Color = "#f59e0b", BlocksMovement = true, DisplayOrder = 3 },
                 new AssetStatus { Code = "MIS", Name = "Missing", StatusCategory = "Missing", Color = "#7c3aed", BlocksMovement = true, DisplayOrder = 4 },
-                new AssetStatus { Code = "TRN", Name = "In Transit", StatusCategory = "In Transit", Color = "#0891b2", DisplayOrder = 5 },
+                new AssetStatus { Code = "TRN", Name = "In Transit", StatusCategory = "In Transit", Color = "#0891b2", IsOperational = true, DisplayOrder = 5 },
                 new AssetStatus { Code = "DSP", Name = "Disposed", StatusCategory = "Disposed", Color = "#6b7280", IsTerminal = true, BlocksMovement = true, DisplayOrder = 6 });
             await db.SaveChangesAsync(cancellationToken);
         }

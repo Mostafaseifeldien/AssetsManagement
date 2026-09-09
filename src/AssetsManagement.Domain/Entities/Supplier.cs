@@ -2,7 +2,7 @@ namespace AssetsManagement.Domain;
 
 public sealed class Supplier : CodedMasterEntity
 {
-    public string SupplierKind { get; set; } = "General";
+        public string SupplierKind { get; set; } = "";
     public string? TaxRegistration { get; set; }
     public string? ContactPerson { get; set; }
     public string? Telephone { get; set; }
