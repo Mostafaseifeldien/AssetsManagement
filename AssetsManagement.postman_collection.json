@@ -214,7 +214,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"tagIdentifier\":\"EPC:3034-DEMO-001\",\"tagType\":\"Passive UHF\",\"encodingStandard\":\"GS1 SGTIN\"}" },
+            "body": { "mode": "raw", "raw": "{\"tagIdentifier\":\"EPC:3034-DEMO-001\",\"tagType\":\"Passive UHF\",\"encodingStandard\":\"GS1 SGTIN\",\"status\":\"Unassigned\",\"moreInformation\":false}" },
             "url": "{{baseUrl}}/api/rfid-tags"
           }
         },
