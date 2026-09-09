@@ -24,15 +24,16 @@ public sealed class AssetCategoryRequest
     public string? AccountCode { get; init; }
 }
 
-public sealed record AssetCategoryListItemDto(Guid Id, string Name, string? Code, bool Active);
+public sealed record AssetCategoryListItemDto(Guid Id, string Name, string? Code, bool Active, bool MoreInformation);
 
-public sealed record AssetCategoryTypeItemDto(string AssetType, string Code, bool Active);
+public sealed record AssetCategoryTypeItemDto(string AssetType, string Code, bool Active, bool MoreInformation);
 
 public sealed record AssetCategoryDetailDto(
     Guid Id,
     string Name,
     string? Code,
     bool Active,
+    bool MoreInformation,
     string? AlternateName,
     string? ParentCategory,
     string? AccountCode,

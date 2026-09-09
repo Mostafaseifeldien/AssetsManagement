@@ -10,4 +10,5 @@ public sealed class AssetModel : CodedMasterEntity
     public string? Specifications { get; set; }
     public int? ExpectedUsefulLifeMonths { get; set; }
     public string? Documentation { get; set; }
+    public bool MoreInformation { get; set; }
 }

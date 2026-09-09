@@ -55,7 +55,8 @@ public sealed class AssetTypeService(
                 x.AssetCategory != null ? x.AssetCategory.Name : null,
                 x.RequiresSerialNumber,
                 x.DefaultStatus != null ? x.DefaultStatus.Name : null,
-                x.IsActive))
+                x.IsActive,
+                x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -193,6 +194,7 @@ public sealed class AssetTypeService(
         entity.RequiresSerialNumber = request.RequiresSerialNumber == true;
         entity.DefaultStatusId = statusId;
         entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -293,6 +295,7 @@ public sealed class AssetTypeService(
             entity.RequiresSerialNumber,
             statusName,
             entity.IsActive,
+            entity.MoreInformation,
             entity.AlternateName,
             entity.RequiresRfidTag,
             entity.RequiresBarcode,

@@ -24,13 +24,14 @@ public sealed class ManufacturerRequest
     public string? Website { get; init; }
 }
 
-public sealed record ManufacturerListItemDto(Guid Id, string Name, string Code, bool Active);
+public sealed record ManufacturerListItemDto(Guid Id, string Name, string Code, bool Active, bool MoreInformation);
 
 public sealed record ManufacturerDetailDto(
     Guid Id,
     string Name,
     string Code,
     bool Active,
+    bool MoreInformation,
     string? AlternateName,
     string? Country,
     string? SupportContact,

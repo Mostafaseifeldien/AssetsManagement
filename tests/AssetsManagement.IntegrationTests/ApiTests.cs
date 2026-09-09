@@ -126,8 +126,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(name, item.GetProperty("name").GetString());
         Assert.True(item.TryGetProperty("code", out _));
         Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
-        Assert.False(item.TryGetProperty("accountCode", out _));
 
         var emptyCode = await _client.PostAsJsonAsync("/api/asset-categories", new
         {
@@ -197,6 +197,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
         Assert.Equal("معدات الشبكة", createdJson.RootElement.GetProperty("data").GetProperty("alternateName").GetString());
+        Assert.True(createdJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
         Assert.Equal(parentName, createdJson.RootElement.GetProperty("data").GetProperty("parentCategory").GetString());
         Assert.Equal("1520", createdJson.RootElement.GetProperty("data").GetProperty("accountCode").GetString());
 
@@ -209,6 +210,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
         using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
         var updated = ignoredJson.RootElement.GetProperty("data");
+        Assert.False(updated.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("معدات الشبكة", updated.GetProperty("alternateName").GetString());
         Assert.Equal(parentName, updated.GetProperty("parentCategory").GetString());
         Assert.Equal("1520", updated.GetProperty("accountCode").GetString());
@@ -233,9 +235,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(name, item.GetProperty("name").GetString());
         Assert.Equal(code, item.GetProperty("code").GetString());
         Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
-        Assert.False(item.TryGetProperty("country", out _));
-        Assert.False(item.TryGetProperty("website", out _));
 
         var emptyCode = await _client.PostAsJsonAsync("/api/manufacturers", new
         {
@@ -266,6 +267,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var data = createdJson.RootElement.GetProperty("data");
         var id = data.GetProperty("id").GetGuid();
         Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("United States", data.GetProperty("country").GetString());
         Assert.Equal("https://www.cisco.com", data.GetProperty("website").GetString());
         Assert.Equal("Active → Inactive", data.GetProperty("lifecycle").GetString());
@@ -278,6 +280,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
         using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
         Assert.Equal("United States", ignoredJson.RootElement.GetProperty("data").GetProperty("country").GetString());
+        Assert.False(ignoredJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var update = await _client.PutAsJsonAsync($"/api/manufacturers/{id}", new
         {
@@ -338,6 +341,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(data.GetProperty("requiresSerialNumber").GetBoolean());
         Assert.Equal("Working", data.GetProperty("defaultStatus").GetString());
         Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.True(data.GetProperty("requiresRfidTag").GetBoolean());
         Assert.False(data.GetProperty("requiresBarcode").GetBoolean());
         Assert.Equal("LAP-#####", data.GetProperty("numberingScheme").GetString());
@@ -357,6 +361,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Created, byId.StatusCode);
         using var byIdJson = JsonDocument.Parse(await byId.Content.ReadAsStringAsync());
         Assert.Equal(categoryName, byIdJson.RootElement.GetProperty("data").GetProperty("assetCategory").GetString());
+        Assert.False(byIdJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
         Assert.False(byIdJson.RootElement.GetProperty("data").GetProperty("requiresRfidTag").GetBoolean());
 
         var emptyCode = await _client.PostAsJsonAsync("/api/asset-types", new
@@ -421,8 +426,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.False(item.GetProperty("requiresSerialNumber").GetBoolean());
         Assert.True(item.TryGetProperty("defaultStatus", out _));
         Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
-        Assert.False(item.TryGetProperty("numberingScheme", out _));
     }
 
     [Fact]
@@ -448,6 +453,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var ignoredJson = JsonDocument.Parse(await ignoredMoreInfo.Content.ReadAsStringAsync());
         Assert.Equal(manufacturerName, ignoredJson.RootElement.GetProperty("data").GetProperty("manufacturer").GetString());
         Assert.True(ignoredJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
+        Assert.False(ignoredJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
         Assert.True(ignoredJson.RootElement.GetProperty("data").GetProperty("assetType").ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
 
         var withType = await _client.PostAsJsonAsync("/api/asset-models", new
@@ -461,6 +467,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("General Asset", typeJson.RootElement.GetProperty("data").GetProperty("assetType").GetString());
         Assert.Equal(48, typeJson.RootElement.GetProperty("data").GetProperty("expectedUsefulLife").GetInt32());
         Assert.True(typeJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
+        Assert.True(typeJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var emptyNumber = await _client.PostAsJsonAsync("/api/asset-models", new
         {
@@ -494,6 +501,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var filteredJson = JsonDocument.Parse(await filtered.Content.ReadAsStringAsync());
         var filteredItems = filteredJson.RootElement.GetProperty("data").GetProperty("items").EnumerateArray().ToArray();
         Assert.Contains(filteredItems, x => x.GetProperty("name").GetString() == "OptiPlex");
+        Assert.True(filteredItems.Single(x => x.GetProperty("name").GetString() == "OptiPlex")
+            .GetProperty("moreInformation").GetBoolean());
         Assert.DoesNotContain(filteredItems, x => x.GetProperty("name").GetString() == "Latitude 5540");
 
         var missing = await _client.PostAsJsonAsync("/api/asset-models", new

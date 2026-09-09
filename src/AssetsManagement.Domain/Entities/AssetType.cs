@@ -14,5 +14,6 @@ public sealed class AssetType : CodedMasterEntity
     public string? DefaultDepreciationMethod { get; set; }
     public int? DefaultUsefulLifeMonths { get; set; }
     public string? NumberingFormat { get; set; }
+    public bool MoreInformation { get; set; }
     public ICollection<AssetTypeAttribute> Attributes { get; set; } = [];
 }

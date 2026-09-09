@@ -42,7 +42,7 @@ public sealed class AssetCategoryService(
 
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(x => new AssetCategoryListItemDto(x.Id, x.Name, string.IsNullOrWhiteSpace(x.Code) ? null : x.Code, x.IsActive))
+            .Select(x => new AssetCategoryListItemDto(x.Id, x.Name, string.IsNullOrWhiteSpace(x.Code) ? null : x.Code, x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -166,6 +166,7 @@ public sealed class AssetCategoryService(
         entity.Name = request.Name.Trim();
         entity.Code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
         entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -240,7 +241,7 @@ public sealed class AssetCategoryService(
         var types = await db.AssetTypes.AsNoTracking()
             .Where(x => x.AssetCategoryId == entity.Id)
             .OrderBy(x => x.Name)
-            .Select(x => new AssetCategoryTypeItemDto(x.Name, x.Code, x.IsActive))
+            .Select(x => new AssetCategoryTypeItemDto(x.Name, x.Code, x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
 
         return new(
@@ -248,6 +249,7 @@ public sealed class AssetCategoryService(
             entity.Name,
             NullIfEmpty(entity.Code),
             entity.IsActive,
+            entity.MoreInformation,
             entity.AlternateName,
             parentName,
             entity.AccountCode,

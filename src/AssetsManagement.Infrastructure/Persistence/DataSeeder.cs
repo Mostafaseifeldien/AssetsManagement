@@ -17,6 +17,7 @@ public static class DataSeeder
             await db.Database.MigrateAsync(cancellationToken);
         await EnsureEmptyAssetModelNumbersAreAllowedAsync(db, cancellationToken);
         await EnsureEmptyMasterCodesAreAllowedAsync(db, cancellationToken);
+        await EnsureMoreInformationColumnsAsync(db, cancellationToken);
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         const string adminRole = "Admin";
@@ -115,6 +116,27 @@ public static class DataSeeder
                 ON [dbo].[Manufacturers]([Code])
                 WHERE [Code] IS NOT NULL AND [Code] <> N'';
             END
+            """, cancellationToken);
+    }
+
+    private static async Task EnsureMoreInformationColumnsAsync(
+        AssetsDbContext db, CancellationToken cancellationToken)
+    {
+        if (db.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) != true)
+            return;
+        await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH(N'dbo.AssetCategories', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[AssetCategories] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_AssetCategories_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.AssetModels', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[AssetModels] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_AssetModels_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.AssetTypes', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[AssetTypes] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_AssetTypes_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.Manufacturers', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[Manufacturers] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_Manufacturers_MoreInformation] DEFAULT(0);
             """, cancellationToken);
     }
 

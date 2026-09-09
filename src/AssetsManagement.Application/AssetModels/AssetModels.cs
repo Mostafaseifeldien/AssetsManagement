@@ -33,7 +33,8 @@ public sealed record AssetModelListItemDto(
     string Name,
     string Manufacturer,
     string? ModelNumber,
-    bool Active);
+    bool Active,
+    bool MoreInformation);
 
 public sealed record AssetModelDetailDto(
     Guid Id,
@@ -41,6 +42,7 @@ public sealed record AssetModelDetailDto(
     string Manufacturer,
     string? ModelNumber,
     bool Active,
+    bool MoreInformation,
     string? AlternateName,
     string? AssetType,
     string? Specifications,

@@ -426,6 +426,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
+
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uniqueidentifier");
 
@@ -528,6 +531,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -646,6 +652,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NumberingFormat")
                         .HasMaxLength(50)
@@ -833,6 +842,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SupportContact")
                         .HasMaxLength(1000)

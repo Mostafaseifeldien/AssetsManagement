@@ -53,7 +53,7 @@ public sealed class AssetModelService(
 
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(x => new AssetModelListItemDto(x.Id, x.Name, x.Manufacturer.Name, x.ModelNumber, x.IsActive))
+            .Select(x => new AssetModelListItemDto(x.Id, x.Name, x.Manufacturer.Name, x.ModelNumber, x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -183,6 +183,7 @@ public sealed class AssetModelService(
         entity.ManufacturerId = manufacturerId;
         entity.ModelNumber = string.IsNullOrWhiteSpace(request.ModelNumber) ? "" : request.ModelNumber.Trim();
         entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -305,6 +306,7 @@ public sealed class AssetModelService(
             manufacturerName,
             entity.ModelNumber,
             entity.IsActive,
+            entity.MoreInformation,
             entity.AlternateName,
             typeName,
             entity.Specifications,

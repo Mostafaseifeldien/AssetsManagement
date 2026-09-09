@@ -37,7 +37,7 @@ public sealed class ManufacturerService(
 
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(x => new ManufacturerListItemDto(x.Id, x.Name, x.Code, x.IsActive))
+            .Select(x => new ManufacturerListItemDto(x.Id, x.Name, x.Code, x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -153,6 +153,7 @@ public sealed class ManufacturerService(
         entity.Name = request.Name.Trim();
         entity.Code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
         entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -185,7 +186,7 @@ public sealed class ManufacturerService(
     }
 
     private static ManufacturerDetailDto MapDetail(Manufacturer entity) =>
-        new(entity.Id, entity.Name, entity.Code, entity.IsActive,
+        new(entity.Id, entity.Name, entity.Code, entity.IsActive, entity.MoreInformation,
             entity.AlternateName, entity.Country, entity.SupportContact, entity.Website, Lifecycle);
 
     private void Track(Guid entityId, string field, string? oldValue, string? newValue)

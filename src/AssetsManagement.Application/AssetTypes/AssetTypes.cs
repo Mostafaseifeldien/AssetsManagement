@@ -39,7 +39,8 @@ public sealed record AssetTypeListItemDto(
     string? AssetCategory,
     bool RequiresSerialNumber,
     string? DefaultStatus,
-    bool Active);
+    bool Active,
+    bool MoreInformation);
 
 public sealed record AssetTypeDetailDto(
     Guid Id,
@@ -49,6 +50,7 @@ public sealed record AssetTypeDetailDto(
     bool RequiresSerialNumber,
     string? DefaultStatus,
     bool Active,
+    bool MoreInformation,
     string? AlternateName,
     bool RequiresRfidTag,
     bool RequiresBarcode,
