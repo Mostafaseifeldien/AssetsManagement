@@ -71,16 +71,18 @@ public sealed class AssetTypeService(
         await EnsureUniqueCodeAsync(request.Code, null, cancellationToken);
         var category = await ResolveCategoryAsync(request.AssetCategory, cancellationToken);
         var status = await ResolveStatusAsync(request.DefaultStatus, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         var entity = new AssetType();
         Apply(entity, request, category?.Id, status?.Id, includeMore);
         db.AssetTypes.Add(entity);
         AddHistory(entity.Id, "Record created");
         AddHistory(entity.Id, $"Name set to '{entity.Name}'");
-        AddHistory(entity.Id, $"Code set to '{entity.Code}'");
+        if (!string.IsNullOrWhiteSpace(entity.Code))
+            AddHistory(entity.Id, $"Code set to '{entity.Code}'");
         if (category is not null)
             AddHistory(entity.Id, $"Asset Category set to '{category.Name}'");
-        AddHistory(entity.Id, $"Requires Serial Number set to {YesNoParser.Format(entity.RequiresSerialNumber)}");
+        if (request.RequiresSerialNumber.HasValue)
+            AddHistory(entity.Id, $"Requires Serial Number set to {YesNoParser.Format(entity.RequiresSerialNumber)}");
         if (status is not null)
             AddHistory(entity.Id, $"Default Status set to '{status.Name}'");
         AddHistory(entity.Id, $"Active set to {YesNoParser.Format(entity.IsActive)}");
@@ -97,23 +99,24 @@ public sealed class AssetTypeService(
         await EnsureUniqueCodeAsync(request.Code, id, cancellationToken);
         var category = await ResolveCategoryAsync(request.AssetCategory, cancellationToken);
         var status = await ResolveStatusAsync(request.DefaultStatus, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
+        var code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
 
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
-        Track(entity.Id, "Code", entity.Code, request.Code.Trim());
+        Track(entity.Id, "Code", entity.Code, code);
         Track(entity.Id, "Asset Category", entity.AssetCategory?.Name, category?.Name);
         Track(entity.Id, "Requires Serial Number", YesNoParser.Format(entity.RequiresSerialNumber),
-            YesNoParser.Format(YesNoParser.TryParse(request.RequiresSerialNumber) == true));
+            YesNoParser.Format(request.RequiresSerialNumber == true));
         Track(entity.Id, "Default Status", entity.DefaultStatus?.Name, status?.Name);
         Track(entity.Id, "Active", YesNoParser.Format(entity.IsActive),
-            YesNoParser.Format(YesNoParser.TryParse(request.Active) == true));
+            YesNoParser.Format(request.Active == true));
         if (includeMore)
         {
             Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
             Track(entity.Id, "Requires RFID Tag", YesNoParser.Format(entity.RequiresRfidTag),
-                YesNoParser.Format(YesNoParser.TryParse(request.RequiresRfidTag) == true));
+                YesNoParser.Format(request.RequiresRfidTag == true));
             Track(entity.Id, "Requires Barcode", YesNoParser.Format(entity.RequiresBarcode),
-                YesNoParser.Format(YesNoParser.TryParse(request.RequiresBarcode) == true));
+                YesNoParser.Format(request.RequiresBarcode == true));
             Track(entity.Id, "Permitted Status Transitions", entity.PermittedStatusTransitions,
                 NullIfEmpty(request.PermittedStatusTransitions));
             Track(entity.Id, "Custom Attribute Schema", entity.CustomAttributeSchema,
@@ -185,16 +188,16 @@ public sealed class AssetTypeService(
         AssetType entity, AssetTypeRequest request, Guid? categoryId, Guid? statusId, bool includeMoreInformation)
     {
         entity.Name = request.Name.Trim();
-        entity.Code = request.Code.Trim();
+        entity.Code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
         entity.AssetCategoryId = categoryId;
-        entity.RequiresSerialNumber = YesNoParser.TryParse(request.RequiresSerialNumber) == true;
+        entity.RequiresSerialNumber = request.RequiresSerialNumber == true;
         entity.DefaultStatusId = statusId;
-        entity.IsActive = YesNoParser.TryParse(request.Active) == true;
+        entity.IsActive = request.Active == true;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
-            entity.RequiresRfidTag = YesNoParser.TryParse(request.RequiresRfidTag) == true;
-            entity.RequiresBarcode = YesNoParser.TryParse(request.RequiresBarcode) == true;
+            entity.RequiresRfidTag = request.RequiresRfidTag == true;
+            entity.RequiresBarcode = request.RequiresBarcode == true;
             entity.PermittedStatusTransitions = NullIfEmpty(request.PermittedStatusTransitions);
             entity.CustomAttributeSchema = NullIfEmpty(request.CustomAttributeSchema);
             entity.DefaultDepreciationMethod = NullIfEmpty(request.DefaultDepreciationMethod);
@@ -230,9 +233,10 @@ public sealed class AssetTypeService(
             AddHistory(entity.Id, $"Numbering Scheme set to '{entity.NumberingFormat}'");
     }
 
-    private async Task EnsureUniqueCodeAsync(string code, Guid? excludingId, CancellationToken cancellationToken)
+    private async Task EnsureUniqueCodeAsync(string? code, Guid? excludingId, CancellationToken cancellationToken)
     {
-        var trimmed = code.Trim();
+        var trimmed = code?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
         if (await db.AssetTypes.AnyAsync(x => x.Code == trimmed && (!excludingId.HasValue || x.Id != excludingId), cancellationToken))
             throw new ConflictException($"Code '{trimmed}' already exists.");
     }
@@ -286,12 +290,12 @@ public sealed class AssetTypeService(
             entity.Name,
             entity.Code,
             categoryName,
-            YesNoParser.Format(entity.RequiresSerialNumber),
+            entity.RequiresSerialNumber,
             statusName,
-            YesNoParser.Format(entity.IsActive),
+            entity.IsActive,
             entity.AlternateName,
-            YesNoParser.Format(entity.RequiresRfidTag),
-            YesNoParser.Format(entity.RequiresBarcode),
+            entity.RequiresRfidTag,
+            entity.RequiresBarcode,
             entity.PermittedStatusTransitions,
             entity.CustomAttributeSchema,
             entity.DefaultDepreciationMethod,

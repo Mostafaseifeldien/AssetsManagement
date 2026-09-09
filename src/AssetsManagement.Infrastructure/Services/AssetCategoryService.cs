@@ -57,9 +57,12 @@ public sealed class AssetCategoryService(
     {
         await EnsureUniqueNameAsync(request.Name, null, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, null, cancellationToken);
-        var parent = await ResolveParentAsync(request.ParentCategory, null, cancellationToken);
+        var includeMore = request.MoreInformation == true;
+        var parent = includeMore
+            ? await ResolveParentAsync(request.ParentCategory, null, cancellationToken)
+            : null;
         var entity = new AssetCategory();
-        Apply(entity, request, parent?.Id);
+        Apply(entity, request, parent?.Id, includeMore);
         db.AssetCategories.Add(entity);
         AddHistory(entity.Id, "Record created", "Name", null, entity.Name);
         if (!string.IsNullOrWhiteSpace(entity.Code))
@@ -81,18 +84,27 @@ public sealed class AssetCategoryService(
         var entity = await FindAsync(id, cancellationToken);
         await EnsureUniqueNameAsync(request.Name, id, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, id, cancellationToken);
-        var parent = await ResolveParentAsync(request.ParentCategory, id, cancellationToken);
-        AssetDataRules.EnsureCategoryParentIsValid(entity.Id, parent?.Id);
-        await EnsureNoCycleAsync(entity.Id, parent?.Id, cancellationToken);
+        var includeMore = request.MoreInformation == true;
+        var parent = includeMore
+            ? await ResolveParentAsync(request.ParentCategory, id, cancellationToken)
+            : entity.Parent;
+        if (includeMore)
+        {
+            AssetDataRules.EnsureCategoryParentIsValid(entity.Id, parent?.Id);
+            await EnsureNoCycleAsync(entity.Id, parent?.Id, cancellationToken);
+        }
 
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
         Track(entity.Id, "Code", NullIfEmpty(entity.Code), NullIfEmpty(request.Code));
         Track(entity.Id, "Active", YesNo(entity.IsActive), YesNo(request.Active == true));
-        Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
-        Track(entity.Id, "Parent Category", entity.Parent?.Name, parent?.Name);
-        Track(entity.Id, "Account Code", entity.AccountCode, NullIfEmpty(request.AccountCode));
+        if (includeMore)
+        {
+            Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
+            Track(entity.Id, "Parent Category", entity.Parent?.Name, parent?.Name);
+            Track(entity.Id, "Account Code", entity.AccountCode, NullIfEmpty(request.AccountCode));
+        }
 
-        Apply(entity, request, parent?.Id);
+        Apply(entity, request, includeMore ? parent?.Id : entity.ParentId, includeMore);
         await SaveAsync(cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
     }
@@ -148,14 +160,20 @@ public sealed class AssetCategoryService(
         await db.AssetCategories.Include(x => x.Parent).SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
         ?? throw new NotFoundException("Asset category was not found.");
 
-    private static void Apply(AssetCategory entity, AssetCategoryRequest request, Guid? parentId)
+    private static void Apply(
+        AssetCategory entity, AssetCategoryRequest request, Guid? parentId, bool includeMoreInformation)
     {
         entity.Name = request.Name.Trim();
-        entity.Code = request.Code?.Trim() ?? "";
+        entity.Code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
         entity.IsActive = request.Active == true;
-        entity.AlternateName = NullIfEmpty(request.AlternateName);
-        entity.ParentId = parentId;
-        entity.AccountCode = NullIfEmpty(request.AccountCode);
+        if (includeMoreInformation)
+        {
+            entity.AlternateName = NullIfEmpty(request.AlternateName);
+            entity.ParentId = parentId;
+            if (entity.Parent?.Id != parentId)
+                entity.Parent = null;
+            entity.AccountCode = NullIfEmpty(request.AccountCode);
+        }
         if (entity.IsActive)
         {
             entity.DeletedAtUtc = null;

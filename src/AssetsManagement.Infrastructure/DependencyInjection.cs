@@ -25,6 +25,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IAssetStatusService, AssetStatusService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IAssetImageService, AssetImageService>();
+        services.AddScoped<ICustomAttributeDefinitionService, CustomAttributeDefinitionService>();
         services.AddDbContext<AssetsDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddIdentityCore<ApplicationUser>(options =>

@@ -548,7 +548,7 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ManufacturerId", "ModelNumber")
                         .IsUnique()
-                        .HasFilter("[ManufacturerId] IS NOT NULL AND [ModelNumber] IS NOT NULL");
+                        .HasFilter("[ModelNumber] IS NOT NULL AND [ModelNumber] <> N''");
 
                     b.ToTable("AssetModels", (string)null);
                 });
@@ -668,7 +668,7 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique()
-                        .HasFilter("[Code] IS NOT NULL");
+                        .HasFilter("[Code] IS NOT NULL AND [Code] <> N''");
 
                     b.HasIndex("DefaultStatusId");
 
@@ -844,7 +844,7 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique()
-                        .HasFilter("[Code] IS NOT NULL");
+                        .HasFilter("[Code] IS NOT NULL AND [Code] <> N''");
 
                     b.HasIndex("IsActive");
 

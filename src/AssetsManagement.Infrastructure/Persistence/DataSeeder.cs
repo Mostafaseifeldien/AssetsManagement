@@ -15,6 +15,8 @@ public static class DataSeeder
             await db.Database.EnsureCreatedAsync(cancellationToken);
         else
             await db.Database.MigrateAsync(cancellationToken);
+        await EnsureEmptyAssetModelNumbersAreAllowedAsync(db, cancellationToken);
+        await EnsureEmptyMasterCodesAreAllowedAsync(db, cancellationToken);
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         const string adminRole = "Admin";
@@ -52,6 +54,68 @@ public static class DataSeeder
             });
             await db.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static async Task EnsureEmptyAssetModelNumbersAreAllowedAsync(
+        AssetsDbContext db, CancellationToken cancellationToken)
+    {
+        if (db.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) != true)
+            return;
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.AssetModels', N'U') IS NOT NULL
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_AssetModels_ManufacturerId_ModelNumber'
+                      AND object_id = OBJECT_ID(N'dbo.AssetModels'))
+                    DROP INDEX [IX_AssetModels_ManufacturerId_ModelNumber] ON [dbo].[AssetModels];
+                CREATE UNIQUE INDEX [IX_AssetModels_ManufacturerId_ModelNumber]
+                ON [dbo].[AssetModels]([ManufacturerId], [ModelNumber])
+                WHERE [ModelNumber] IS NOT NULL AND [ModelNumber] <> N'';
+            END
+            """, cancellationToken);
+    }
+
+    private static async Task EnsureEmptyMasterCodesAreAllowedAsync(
+        AssetsDbContext db, CancellationToken cancellationToken)
+    {
+        if (db.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) != true)
+            return;
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.AssetTypes', N'U') IS NOT NULL
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_AssetTypes_Code'
+                      AND object_id = OBJECT_ID(N'dbo.AssetTypes'))
+                    DROP INDEX [IX_AssetTypes_Code] ON [dbo].[AssetTypes];
+                CREATE UNIQUE INDEX [IX_AssetTypes_Code]
+                ON [dbo].[AssetTypes]([Code])
+                WHERE [Code] IS NOT NULL AND [Code] <> N'';
+            END
+            IF OBJECT_ID(N'dbo.AssetCategories', N'U') IS NOT NULL
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_AssetCategories_Code'
+                      AND object_id = OBJECT_ID(N'dbo.AssetCategories'))
+                    DROP INDEX [IX_AssetCategories_Code] ON [dbo].[AssetCategories];
+                CREATE UNIQUE INDEX [IX_AssetCategories_Code]
+                ON [dbo].[AssetCategories]([Code])
+                WHERE [Code] IS NOT NULL AND [Code] <> N'';
+            END
+            IF OBJECT_ID(N'dbo.Manufacturers', N'U') IS NOT NULL
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM sys.indexes
+                    WHERE name = N'IX_Manufacturers_Code'
+                      AND object_id = OBJECT_ID(N'dbo.Manufacturers'))
+                    DROP INDEX [IX_Manufacturers_Code] ON [dbo].[Manufacturers];
+                CREATE UNIQUE INDEX [IX_Manufacturers_Code]
+                ON [dbo].[Manufacturers]([Code])
+                WHERE [Code] IS NOT NULL AND [Code] <> N'';
+            END
+            """, cancellationToken);
     }
 
     private static void EnsureIdentity(IdentityResult result)

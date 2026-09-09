@@ -51,6 +51,11 @@ public sealed class AssetsDbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.AssetCategoryId);
             e.HasIndex(x => x.DefaultStatusId);
+            var codeIndex = e.HasIndex(x => x.Code).IsUnique();
+            if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+                codeIndex.HasFilter("[Code] IS NOT NULL AND [Code] <> N''");
+            else if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+                codeIndex.HasFilter("Code IS NOT NULL AND Code <> ''");
         });
         builder.Entity<AssetCategory>(e =>
         {
@@ -62,6 +67,8 @@ public sealed class AssetsDbContext(
             var codeIndex = e.HasIndex(x => x.Code).IsUnique();
             if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
                 codeIndex.HasFilter("[Code] IS NOT NULL AND [Code] <> N''");
+            else if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+                codeIndex.HasFilter("Code IS NOT NULL AND Code <> ''");
         });
         builder.Entity<ChangeHistoryEntry>(e =>
         {
@@ -81,6 +88,11 @@ public sealed class AssetsDbContext(
             e.Property(x => x.SupportContact).HasMaxLength(1000);
             e.Property(x => x.Website).HasMaxLength(500);
             e.HasIndex(x => x.Name).IsUnique();
+            var codeIndex = e.HasIndex(x => x.Code).IsUnique();
+            if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+                codeIndex.HasFilter("[Code] IS NOT NULL AND [Code] <> N''");
+            else if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+                codeIndex.HasFilter("Code IS NOT NULL AND Code <> ''");
         });
         builder.Entity<Supplier>(e =>
         {
@@ -106,7 +118,11 @@ public sealed class AssetsDbContext(
             e.Property(x => x.ModelNumber).HasMaxLength(100).IsRequired();
             e.Property(x => x.Specifications).HasMaxLength(4000);
             e.Property(x => x.Documentation).HasMaxLength(4000);
-            e.HasIndex(x => new { x.ManufacturerId, x.ModelNumber }).IsUnique();
+            var modelNumberIndex = e.HasIndex(x => new { x.ManufacturerId, x.ModelNumber }).IsUnique();
+            if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+                modelNumberIndex.HasFilter("[ModelNumber] IS NOT NULL AND [ModelNumber] <> N''");
+            else if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+                modelNumberIndex.HasFilter("ModelNumber IS NOT NULL AND ModelNumber <> ''");
         });
         builder.Entity<AssetStatus>(e =>
         {

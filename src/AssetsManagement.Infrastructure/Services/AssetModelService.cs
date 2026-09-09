@@ -32,7 +32,8 @@ public sealed class AssetModelService(
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim();
-            source = source.Where(x => x.Name.Contains(search) || x.ModelNumber.Contains(search) ||
+            source = source.Where(x => x.Name.Contains(search) ||
+                (x.ModelNumber != null && x.ModelNumber.Contains(search)) ||
                 x.Manufacturer.Name.Contains(search) ||
                 (x.AssetType != null && x.AssetType.Name.Contains(search)) ||
                 (x.AlternateName != null && x.AlternateName.Contains(search)));
@@ -68,7 +69,7 @@ public sealed class AssetModelService(
         var manufacturer = await ResolveManufacturerAsync(request.Manufacturer, cancellationToken)
             ?? throw new NotFoundException("Manufacturer is required.");
         await EnsureUniqueModelNumberAsync(manufacturer.Id, request.ModelNumber, null, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         var assetType = includeMore
             ? await ResolveAssetTypeAsync(request.AssetType, cancellationToken)
             : null;
@@ -78,7 +79,8 @@ public sealed class AssetModelService(
         AddHistory(entity.Id, "Record created");
         AddHistory(entity.Id, $"Name set to '{entity.Name}'");
         AddHistory(entity.Id, $"Manufacturer set to '{manufacturer.Name}'");
-        AddHistory(entity.Id, $"Model Number set to '{entity.ModelNumber}'");
+        if (!string.IsNullOrWhiteSpace(entity.ModelNumber))
+            AddHistory(entity.Id, $"Model Number set to '{entity.ModelNumber}'");
         AddHistory(entity.Id, $"Active set to {YesNoParser.Format(entity.IsActive)}");
         if (includeMore)
             AddMoreInformationHistory(entity, assetType?.Name);
@@ -93,16 +95,17 @@ public sealed class AssetModelService(
         var manufacturer = await ResolveManufacturerAsync(request.Manufacturer, cancellationToken)
             ?? throw new NotFoundException("Manufacturer is required.");
         await EnsureUniqueModelNumberAsync(manufacturer.Id, request.ModelNumber, id, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         var assetType = includeMore
             ? await ResolveAssetTypeAsync(request.AssetType, cancellationToken)
             : null;
+        var modelNumber = string.IsNullOrWhiteSpace(request.ModelNumber) ? "" : request.ModelNumber.Trim();
 
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
         Track(entity.Id, "Manufacturer", entity.Manufacturer.Name, manufacturer.Name);
-        Track(entity.Id, "Model Number", entity.ModelNumber, request.ModelNumber.Trim());
+        Track(entity.Id, "Model Number", entity.ModelNumber, modelNumber);
         Track(entity.Id, "Active", YesNoParser.Format(entity.IsActive),
-            YesNoParser.Format(YesNoParser.TryParse(request.Active) == true));
+            YesNoParser.Format(request.Active == true));
         if (includeMore)
         {
             Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
@@ -113,8 +116,8 @@ public sealed class AssetModelService(
             Track(entity.Id, "Documentation", entity.Documentation, NullIfEmpty(request.Documentation));
         }
 
-        if (!string.Equals(entity.ModelNumber, request.ModelNumber.Trim(), StringComparison.Ordinal))
-            entity.Code = await AllocateCodeAsync(request.ModelNumber, id, cancellationToken);
+        if (!string.Equals(entity.ModelNumber, modelNumber, StringComparison.Ordinal))
+            entity.Code = await AllocateCodeAsync(modelNumber, id, cancellationToken);
         Apply(entity, request, manufacturer.Id, assetType?.Id, includeMore);
         await SaveAsync(cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
@@ -149,7 +152,8 @@ public sealed class AssetModelService(
     {
         var source = db.AssetModels.AsNoTracking().Where(x => x.IsActive);
         if (!string.IsNullOrWhiteSpace(search))
-            source = source.Where(x => x.Name.Contains(search) || x.ModelNumber.Contains(search) ||
+            source = source.Where(x => x.Name.Contains(search) ||
+                (x.ModelNumber != null && x.ModelNumber.Contains(search)) ||
                 x.Code.Contains(search));
         return await source.OrderBy(x => x.Name).Take(50)
             .Select(x => new LookupDto(x.Id, x.Code, x.Name)).ToArrayAsync(cancellationToken);
@@ -177,8 +181,8 @@ public sealed class AssetModelService(
     {
         entity.Name = request.Name.Trim();
         entity.ManufacturerId = manufacturerId;
-        entity.ModelNumber = request.ModelNumber.Trim();
-        entity.IsActive = YesNoParser.TryParse(request.Active) == true;
+        entity.ModelNumber = string.IsNullOrWhiteSpace(request.ModelNumber) ? "" : request.ModelNumber.Trim();
+        entity.IsActive = request.Active == true;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -211,16 +215,17 @@ public sealed class AssetModelService(
     }
 
     private async Task EnsureUniqueModelNumberAsync(
-        Guid manufacturerId, string modelNumber, Guid? excludingId, CancellationToken cancellationToken)
+        Guid manufacturerId, string? modelNumber, Guid? excludingId, CancellationToken cancellationToken)
     {
-        var trimmed = modelNumber.Trim();
+        var trimmed = modelNumber?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
         if (await db.AssetModels.AnyAsync(x => x.ManufacturerId == manufacturerId && x.ModelNumber == trimmed &&
             (!excludingId.HasValue || x.Id != excludingId), cancellationToken))
             throw new ConflictException($"Model number '{trimmed}' already exists for this manufacturer.");
     }
 
     private async Task<string> AllocateCodeAsync(
-        string modelNumber, Guid? excludingId, CancellationToken cancellationToken)
+        string? modelNumber, Guid? excludingId, CancellationToken cancellationToken)
     {
         var baseCode = ToCode(modelNumber);
         var code = baseCode;
@@ -234,10 +239,10 @@ public sealed class AssetModelService(
         return code;
     }
 
-    private static string ToCode(string modelNumber)
+    private static string ToCode(string? modelNumber)
     {
-        var builder = new StringBuilder(modelNumber.Length);
-        foreach (var ch in modelNumber.Trim())
+        var builder = new StringBuilder(modelNumber?.Length ?? 0);
+        foreach (var ch in (modelNumber ?? "").Trim())
         {
             if (char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-')
                 builder.Append(ch);
@@ -299,7 +304,7 @@ public sealed class AssetModelService(
             entity.Name,
             manufacturerName,
             entity.ModelNumber,
-            YesNoParser.Format(entity.IsActive),
+            entity.IsActive,
             entity.AlternateName,
             typeName,
             entity.Specifications,
@@ -346,7 +351,8 @@ public sealed class AssetModelService(
         }
         catch (DbUpdateException ex) when (
             ex.InnerException?.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true ||
-            ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true)
+            ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
+            ex.InnerException?.Message.Contains("UNIQUE constraint", StringComparison.OrdinalIgnoreCase) == true)
         {
             throw new ConflictException("A record with the same unique value already exists.");
         }

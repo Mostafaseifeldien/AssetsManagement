@@ -53,11 +53,12 @@ public sealed class ManufacturerService(
         await EnsureUniqueNameAsync(request.Name, null, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, null, cancellationToken);
         var entity = new Manufacturer();
-        Apply(entity, request, includeMoreInformation: YesNoParser.TryParse(request.MoreInformation) == true);
+        Apply(entity, request, includeMoreInformation: request.MoreInformation == true);
         db.Manufacturers.Add(entity);
         AddHistory(entity.Id, "Record created");
         AddHistory(entity.Id, $"Name set to '{entity.Name}'");
-        AddHistory(entity.Id, $"Code set to '{entity.Code}'");
+        if (!string.IsNullOrWhiteSpace(entity.Code))
+            AddHistory(entity.Id, $"Code set to '{entity.Code}'");
         AddHistory(entity.Id, $"Active set to {YesNoParser.Format(entity.IsActive)}");
         if (!string.IsNullOrWhiteSpace(entity.AlternateName))
             AddHistory(entity.Id, $"Alternate Name set to '{entity.AlternateName}'");
@@ -77,12 +78,13 @@ public sealed class ManufacturerService(
         var entity = await FindAsync(id, cancellationToken);
         await EnsureUniqueNameAsync(request.Name, id, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, id, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
+        var code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
 
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
-        Track(entity.Id, "Code", entity.Code, request.Code.Trim());
+        Track(entity.Id, "Code", entity.Code, code);
         Track(entity.Id, "Active", YesNoParser.Format(entity.IsActive),
-            YesNoParser.Format(YesNoParser.TryParse(request.Active) == true));
+            YesNoParser.Format(request.Active == true));
         if (includeMore)
         {
             Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
@@ -149,8 +151,8 @@ public sealed class ManufacturerService(
     private static void Apply(Manufacturer entity, ManufacturerRequest request, bool includeMoreInformation)
     {
         entity.Name = request.Name.Trim();
-        entity.Code = request.Code.Trim();
-        entity.IsActive = YesNoParser.TryParse(request.Active) == true;
+        entity.Code = string.IsNullOrWhiteSpace(request.Code) ? "" : request.Code.Trim();
+        entity.IsActive = request.Active == true;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -174,15 +176,16 @@ public sealed class ManufacturerService(
             throw new ConflictException($"A manufacturer named '{trimmed}' already exists.");
     }
 
-    private async Task EnsureUniqueCodeAsync(string code, Guid? excludingId, CancellationToken cancellationToken)
+    private async Task EnsureUniqueCodeAsync(string? code, Guid? excludingId, CancellationToken cancellationToken)
     {
-        var trimmed = code.Trim();
+        var trimmed = code?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
         if (await db.Manufacturers.AnyAsync(x => x.Code == trimmed && (!excludingId.HasValue || x.Id != excludingId), cancellationToken))
             throw new ConflictException($"Code '{trimmed}' already exists.");
     }
 
     private static ManufacturerDetailDto MapDetail(Manufacturer entity) =>
-        new(entity.Id, entity.Name, entity.Code, YesNoParser.Format(entity.IsActive),
+        new(entity.Id, entity.Name, entity.Code, entity.IsActive,
             entity.AlternateName, entity.Country, entity.SupportContact, entity.Website, Lifecycle);
 
     private void Track(Guid entityId, string field, string? oldValue, string? newValue)

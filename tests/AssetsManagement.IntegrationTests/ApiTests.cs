@@ -90,7 +90,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var parentName = $"IT Equipment {Guid.NewGuid():N}"[..28];
         var parentResponse = await _client.PostAsJsonAsync("/api/asset-categories", new
         {
-            name = parentName, code = $"IT{Guid.NewGuid():N}"[..10], active = true
+            name = parentName, code = $"IT{Guid.NewGuid():N}"[..10], active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, parentResponse.StatusCode);
 
@@ -99,6 +99,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             name = $"Network Equipment {Guid.NewGuid():N}"[..32],
             code = $"NET{Guid.NewGuid():N}"[..10],
             active = true,
+            moreInformation = true,
             parentCategory = parentName,
             accountCode = "1520"
         });
@@ -114,7 +115,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var name = $"Furniture {Guid.NewGuid():N}"[..24];
         var created = await _client.PostAsJsonAsync("/api/asset-categories", new
         {
-            name, code = $"FURN{Guid.NewGuid():N}"[..10], active = true
+            name, code = $"FURN{Guid.NewGuid():N}"[..10], active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -127,6 +128,17 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(item.GetProperty("active").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
         Assert.False(item.TryGetProperty("accountCode", out _));
+
+        var emptyCode = await _client.PostAsJsonAsync("/api/asset-categories", new
+        {
+            name = $"Empty {Guid.NewGuid():N}"[..18], code = "", active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, emptyCode.StatusCode);
+        var secondEmpty = await _client.PostAsJsonAsync("/api/asset-categories", new
+        {
+            name = $"Empty2 {Guid.NewGuid():N}"[..18], code = "", active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, secondEmpty.StatusCode);
     }
 
     [Fact]
@@ -136,7 +148,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var name = $"Safety {Guid.NewGuid():N}"[..20];
         var created = await _client.PostAsJsonAsync("/api/asset-categories", new
         {
-            name, code = $"SAF{Guid.NewGuid():N}"[..10], active = true
+            name, code = $"SAF{Guid.NewGuid():N}"[..10], active = true, moreInformation = false
         });
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
@@ -144,7 +156,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var update = await _client.PutAsJsonAsync($"/api/asset-categories/{id}", new
         {
             name, code = createdJson.RootElement.GetProperty("data").GetProperty("code").GetString(),
-            active = true, accountCode = "12345"
+            active = true, moreInformation = true, accountCode = "12345"
         });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
 
@@ -164,6 +176,45 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Asset_category_more_information_false_ignores_optional_fields()
+    {
+        await AuthorizeAsync();
+        var parentName = $"IT Equipment {Guid.NewGuid():N}"[..28];
+        Assert.Equal(HttpStatusCode.Created, (await _client.PostAsJsonAsync("/api/asset-categories", new
+        {
+            name = parentName, code = $"IT{Guid.NewGuid():N}"[..10],
+            active = true, moreInformation = false
+        })).StatusCode);
+
+        var name = $"Network {Guid.NewGuid():N}"[..20];
+        var created = await _client.PostAsJsonAsync("/api/asset-categories", new
+        {
+            name, code = $"NET{Guid.NewGuid():N}"[..10], active = true,
+            moreInformation = true, alternateName = "معدات الشبكة",
+            parentCategory = parentName, accountCode = "1520"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = createdJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        Assert.Equal("معدات الشبكة", createdJson.RootElement.GetProperty("data").GetProperty("alternateName").GetString());
+        Assert.Equal(parentName, createdJson.RootElement.GetProperty("data").GetProperty("parentCategory").GetString());
+        Assert.Equal("1520", createdJson.RootElement.GetProperty("data").GetProperty("accountCode").GetString());
+
+        var ignored = await _client.PutAsJsonAsync($"/api/asset-categories/{id}", new
+        {
+            name, code = createdJson.RootElement.GetProperty("data").GetProperty("code").GetString(),
+            active = true, moreInformation = false,
+            alternateName = "ignored", parentCategory = "ignored", accountCode = "9999"
+        });
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+        using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
+        var updated = ignoredJson.RootElement.GetProperty("data");
+        Assert.Equal("معدات الشبكة", updated.GetProperty("alternateName").GetString());
+        Assert.Equal(parentName, updated.GetProperty("parentCategory").GetString());
+        Assert.Equal("1520", updated.GetProperty("accountCode").GetString());
+    }
+
+    [Fact]
     public async Task Manufacturer_list_returns_name_code_and_active()
     {
         await AuthorizeAsync();
@@ -171,7 +222,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var code = $"DELL{Guid.NewGuid():N}"[..10];
         var created = await _client.PostAsJsonAsync("/api/manufacturers", new
         {
-            name, code, active = "Yes", moreInformation = "No"
+            name, code, active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -185,6 +236,17 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.False(item.TryGetProperty("alternateName", out _));
         Assert.False(item.TryGetProperty("country", out _));
         Assert.False(item.TryGetProperty("website", out _));
+
+        var emptyCode = await _client.PostAsJsonAsync("/api/manufacturers", new
+        {
+            name = $"Empty {Guid.NewGuid():N}"[..18], code = "", active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, emptyCode.StatusCode);
+        var secondEmpty = await _client.PostAsJsonAsync("/api/manufacturers", new
+        {
+            name = $"Empty2 {Guid.NewGuid():N}"[..18], code = "", active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, secondEmpty.StatusCode);
     }
 
     [Fact]
@@ -195,7 +257,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var code = $"CSCO{Guid.NewGuid():N}"[..10];
         var created = await _client.PostAsJsonAsync("/api/manufacturers", new
         {
-            name, code, active = "Yes", moreInformation = "Yes",
+            name, code, active = true, moreInformation = true,
             alternateName = "", country = "United States",
             supportContact = "", website = "https://www.cisco.com"
         });
@@ -203,14 +265,14 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var data = createdJson.RootElement.GetProperty("data");
         var id = data.GetProperty("id").GetGuid();
-        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.True(data.GetProperty("active").GetBoolean());
         Assert.Equal("United States", data.GetProperty("country").GetString());
         Assert.Equal("https://www.cisco.com", data.GetProperty("website").GetString());
         Assert.Equal("Active → Inactive", data.GetProperty("lifecycle").GetString());
 
         var ignored = await _client.PutAsJsonAsync($"/api/manufacturers/{id}", new
         {
-            name, code, active = "Yes", moreInformation = "No",
+            name, code, active = true, moreInformation = false,
             country = "Egypt", website = "https://ignored.example"
         });
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
@@ -219,7 +281,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var update = await _client.PutAsJsonAsync($"/api/manufacturers/{id}", new
         {
-            name, code, active = "Yes", moreInformation = "Yes",
+            name, code, active = true, moreInformation = true,
             country = "United States", supportContact = "support@cisco.com"
         });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
@@ -248,7 +310,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var categoryName = $"IT Equipment {Guid.NewGuid():N}"[..28];
         var categoryResponse = await _client.PostAsJsonAsync("/api/asset-categories", new
         {
-            name = categoryName, code = $"IT{Guid.NewGuid():N}"[..10], active = true
+            name = categoryName, code = $"IT{Guid.NewGuid():N}"[..10], active = true, moreInformation = false
         });
         using var categoryJson = JsonDocument.Parse(await categoryResponse.Content.ReadAsStringAsync());
         var categoryId = categoryJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
@@ -258,13 +320,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             name = $"Laptop {Guid.NewGuid():N}"[..20],
             code = $"LAP{Guid.NewGuid():N}"[..10],
             assetCategory = categoryName,
-            requiresSerialNumber = "Yes",
+            requiresSerialNumber = true,
             defaultStatus = "Working",
-            active = "Yes",
-            moreInformation = "Yes",
+            active = true,
+            moreInformation = true,
             alternateName = "حاسوب محمول",
-            requiresRfidTag = "Yes",
-            requiresBarcode = "No",
+            requiresRfidTag = true,
+            requiresBarcode = false,
             numberingScheme = "LAP-#####",
             defaultDepreciationMethod = "Straight line",
             defaultUsefulLife = 36
@@ -273,10 +335,11 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var byNameJson = JsonDocument.Parse(await byName.Content.ReadAsStringAsync());
         var data = byNameJson.RootElement.GetProperty("data");
         Assert.Equal(categoryName, data.GetProperty("assetCategory").GetString());
-        Assert.Equal("Yes", data.GetProperty("requiresSerialNumber").GetString());
+        Assert.True(data.GetProperty("requiresSerialNumber").GetBoolean());
         Assert.Equal("Working", data.GetProperty("defaultStatus").GetString());
-        Assert.Equal("Yes", data.GetProperty("active").GetString());
-        Assert.Equal("Yes", data.GetProperty("requiresRfidTag").GetString());
+        Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("requiresRfidTag").GetBoolean());
+        Assert.False(data.GetProperty("requiresBarcode").GetBoolean());
         Assert.Equal("LAP-#####", data.GetProperty("numberingScheme").GetString());
         Assert.Equal(36, data.GetProperty("defaultUsefulLife").GetInt32());
         Assert.Equal("Active → Inactive", data.GetProperty("lifecycle").GetString());
@@ -286,21 +349,56 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             name = $"Desktop {Guid.NewGuid():N}"[..20],
             code = $"DSK{Guid.NewGuid():N}"[..10],
             assetCategory = categoryId.ToString(),
-            requiresSerialNumber = "No",
+            requiresSerialNumber = false,
             defaultStatus = "Working",
-            active = "Yes",
-            moreInformation = "No"
+            active = true,
+            moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, byId.StatusCode);
         using var byIdJson = JsonDocument.Parse(await byId.Content.ReadAsStringAsync());
         Assert.Equal(categoryName, byIdJson.RootElement.GetProperty("data").GetProperty("assetCategory").GetString());
-        Assert.Equal("No", byIdJson.RootElement.GetProperty("data").GetProperty("requiresRfidTag").GetString());
+        Assert.False(byIdJson.RootElement.GetProperty("data").GetProperty("requiresRfidTag").GetBoolean());
+
+        var emptyCode = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = $"Tablet {Guid.NewGuid():N}"[..20],
+            code = "",
+            active = true,
+            moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, emptyCode.StatusCode);
+
+        var secondEmpty = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = $"Monitor {Guid.NewGuid():N}"[..20],
+            code = "",
+            active = true,
+            moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, secondEmpty.StatusCode);
+
+        var duplicateCode = $"DUP{Guid.NewGuid():N}"[..10];
+        Assert.Equal(HttpStatusCode.Created, (await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = $"Phone {Guid.NewGuid():N}"[..20],
+            code = duplicateCode,
+            active = true,
+            moreInformation = false
+        })).StatusCode);
+        var duplicate = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = $"Phone copy {Guid.NewGuid():N}"[..24],
+            code = duplicateCode,
+            active = true,
+            moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
 
         var missing = await _client.PostAsJsonAsync("/api/asset-types", new
         {
             name = "Unknown Cat", code = $"UNK{Guid.NewGuid():N}"[..10],
-            assetCategory = "Does Not Exist", requiresSerialNumber = "No",
-            active = "Yes", moreInformation = "No"
+            assetCategory = "Does Not Exist", requiresSerialNumber = false,
+            active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
@@ -335,33 +433,60 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var manufacturer = await _client.PostAsJsonAsync("/api/manufacturers", new
         {
             name = manufacturerName, code = $"DL{Guid.NewGuid():N}"[..10],
-            active = "Yes", moreInformation = "No"
+            active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, manufacturer.StatusCode);
 
         var ignoredMoreInfo = await _client.PostAsJsonAsync("/api/asset-models", new
         {
             name = "Latitude 5540", manufacturer = manufacturerName, modelNumber = $"5540-{Guid.NewGuid():N}"[..16],
-            active = "Yes", moreInformation = "No",
+            active = true, moreInformation = false,
             alternateName = "string", assetType = "string", specifications = "string",
             expectedUsefulLife = 0, documentation = "string"
         });
         Assert.Equal(HttpStatusCode.Created, ignoredMoreInfo.StatusCode);
         using var ignoredJson = JsonDocument.Parse(await ignoredMoreInfo.Content.ReadAsStringAsync());
         Assert.Equal(manufacturerName, ignoredJson.RootElement.GetProperty("data").GetProperty("manufacturer").GetString());
-        Assert.Equal("Yes", ignoredJson.RootElement.GetProperty("data").GetProperty("active").GetString());
+        Assert.True(ignoredJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
         Assert.True(ignoredJson.RootElement.GetProperty("data").GetProperty("assetType").ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
 
         var withType = await _client.PostAsJsonAsync("/api/asset-models", new
         {
             name = "OptiPlex", manufacturer = manufacturerName, modelNumber = $"OPT-{Guid.NewGuid():N}"[..16],
-            active = "Yes", moreInformation = "Yes",
+            active = true, moreInformation = true,
             assetType = "General Asset", expectedUsefulLife = 48, specifications = "Business desktop"
         });
         Assert.Equal(HttpStatusCode.Created, withType.StatusCode);
         using var typeJson = JsonDocument.Parse(await withType.Content.ReadAsStringAsync());
         Assert.Equal("General Asset", typeJson.RootElement.GetProperty("data").GetProperty("assetType").GetString());
         Assert.Equal(48, typeJson.RootElement.GetProperty("data").GetProperty("expectedUsefulLife").GetInt32());
+        Assert.True(typeJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
+
+        var emptyNumber = await _client.PostAsJsonAsync("/api/asset-models", new
+        {
+            name = "Precision", manufacturer = manufacturerName, modelNumber = "",
+            active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, emptyNumber.StatusCode);
+        using var emptyJson = JsonDocument.Parse(await emptyNumber.Content.ReadAsStringAsync());
+        Assert.True(emptyJson.RootElement.GetProperty("data").GetProperty("modelNumber").ValueKind
+            is JsonValueKind.Null or JsonValueKind.Undefined
+            || string.IsNullOrEmpty(emptyJson.RootElement.GetProperty("data").GetProperty("modelNumber").GetString()));
+        Assert.True(emptyJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
+
+        var secondEmpty = await _client.PostAsJsonAsync("/api/asset-models", new
+        {
+            name = "XPS", manufacturer = manufacturerName, modelNumber = "",
+            active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, secondEmpty.StatusCode);
+
+        var omittedNumber = await _client.PostAsJsonAsync("/api/asset-models", new
+        {
+            name = "Vostro", manufacturer = manufacturerName,
+            active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, omittedNumber.StatusCode);
 
         var filtered = await _client.GetAsync(
             $"/api/asset-models?assetType={Uri.EscapeDataString("General Asset")}&manufacturer={Uri.EscapeDataString(manufacturerName)}");
@@ -374,7 +499,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var missing = await _client.PostAsJsonAsync("/api/asset-models", new
         {
             name = "Unknown", manufacturer = "Does Not Exist", modelNumber = "X1",
-            active = "Yes", moreInformation = "No"
+            active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
@@ -505,13 +630,226 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         {
             code, label = "Prototype Field", dataType = "List",
             listValues = new[] { "One", "Two" }, requirement = "Required",
-            displayOrder = 1, showInList = true
+            showInList = true, unit = "GB", helpText = "Installed storage options."
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(code, json.RootElement.GetProperty("data").GetProperty("code").GetString());
-        Assert.True(json.RootElement.GetProperty("data").GetProperty("showInList").GetBoolean());
+        var data = json.RootElement.GetProperty("data");
+        Assert.Equal(code, data.GetProperty("code").GetString());
+        Assert.True(data.GetProperty("showInList").GetBoolean());
+        Assert.Equal("List", data.GetProperty("dataType").GetString());
+        Assert.Equal("GB", data.GetProperty("unit").GetString());
+        Assert.Equal("Installed storage options.", data.GetProperty("helpText").GetString());
+        Assert.Equal(["One", "Two"], data.GetProperty("listValues")
+            .EnumerateArray().Select(x => x.GetString()).ToArray());
+        Assert.True(data.GetProperty("displayOrder").GetInt32() >= 1);
+
+        var listed = await _client.GetAsync($"/api/asset-types/{typeId}/attributes");
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+        using var listedJson = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
+        var item = listedJson.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal("Prototype Field", item.GetProperty("label").GetString());
+        Assert.Equal(code, item.GetProperty("code").GetString());
+        Assert.Equal("List", item.GetProperty("dataType").GetString());
+        Assert.Equal("Required", item.GetProperty("requirement").GetString());
+        Assert.Equal("GB", item.GetProperty("unit").GetString());
+        Assert.True(item.GetProperty("showInList").GetBoolean());
+        Assert.Equal("Installed storage options.", item.GetProperty("helpText").GetString());
+    }
+
+    [Fact]
+    public async Task Custom_attribute_definition_list_and_detail_match_screens()
+    {
+        await AuthorizeAsync();
+        var typeName = $"Laptop {Guid.NewGuid():N}"[..20];
+        var typeResponse = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = typeName, code = $"LAP{Guid.NewGuid():N}"[..10],
+            requiresSerialNumber = false, active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, typeResponse.StatusCode);
+
+        var code = $"ram_{Guid.NewGuid():N}"[..20].ToLowerInvariant();
+        var created = await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = typeName, code, label = "Memory", dataType = "Number",
+            effectiveClass = "Recommended", showInList = "Yes", active = "Yes",
+            moreInformation = "Yes", alternateName = "الذاكرة", unit = "GB",
+            helpText = "Installed RAM in gigabytes."
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var data = createdJson.RootElement.GetProperty("data");
+        var id = data.GetProperty("id").GetGuid();
+        Assert.Equal(typeName, data.GetProperty("assetType").GetString());
+        Assert.Equal("Memory", data.GetProperty("label").GetString());
+        Assert.Equal("Number", data.GetProperty("dataType").GetString());
+        Assert.Equal("Recommended", data.GetProperty("effectiveClass").GetString());
+        Assert.Equal("Yes", data.GetProperty("showInList").GetString());
+        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.Equal("الذاكرة", data.GetProperty("alternateName").GetString());
+        Assert.Equal("GB", data.GetProperty("unit").GetString());
+        Assert.Equal("Draft → Active → Retired", data.GetProperty("lifecycle").GetString());
+        Assert.True(data.GetProperty("displayOrder").GetInt32() >= 1);
+
+        var list = await _client.GetAsync(
+            $"/api/custom-attribute-definitions?search={code}&assetType={Uri.EscapeDataString(typeName)}");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        using var listed = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var item = listed.RootElement.GetProperty("data").GetProperty("items")[0];
+        Assert.Equal(typeName, item.GetProperty("assetType").GetString());
+        Assert.Equal(code, item.GetProperty("code").GetString());
+        Assert.Equal("Memory", item.GetProperty("label").GetString());
+        Assert.Equal("Number", item.GetProperty("dataType").GetString());
+        Assert.Equal("Recommended", item.GetProperty("effectiveClass").GetString());
+        Assert.True(item.TryGetProperty("displayOrder", out _));
+        Assert.False(item.TryGetProperty("alternateName", out _));
+        Assert.False(item.TryGetProperty("unit", out _));
+        Assert.False(item.TryGetProperty("helpText", out _));
+        Assert.False(item.TryGetProperty("active", out _));
+
+        var ignored = await _client.PutAsJsonAsync($"/api/custom-attribute-definitions/{id}", new
+        {
+            assetType = typeName, code, label = "Memory", dataType = "Number",
+            effectiveClass = "Required", showInList = "Yes", active = "Yes",
+            moreInformation = "No", alternateName = "ignored", unit = "MB"
+        });
+        Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
+        using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
+        var updated = ignoredJson.RootElement.GetProperty("data");
+        Assert.Equal("Required", updated.GetProperty("effectiveClass").GetString());
+        Assert.Equal("الذاكرة", updated.GetProperty("alternateName").GetString());
+        Assert.Equal("MB", updated.GetProperty("unit").GetString());
+
+        var duplicate = await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = typeName, code, label = "Memory copy", dataType = "Number",
+            effectiveClass = "Optional", active = "Yes", moreInformation = "No"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+
+        var yesNo = await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = typeName, code = $"psu_{Guid.NewGuid():N}"[..16].ToLowerInvariant(),
+            label = "Redundant power", dataType = "Yes or no",
+            effectiveClass = "Recommended", active = "Yes", moreInformation = "No"
+        });
+        Assert.Equal(HttpStatusCode.Created, yesNo.StatusCode);
+        using var yesNoJson = JsonDocument.Parse(await yesNo.Content.ReadAsStringAsync());
+        Assert.Equal("Yes or no", yesNoJson.RootElement.GetProperty("data").GetProperty("dataType").GetString());
+
+        var history = await _client.GetAsync($"/api/custom-attribute-definitions/{id}/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        using var historyJson = JsonDocument.Parse(await history.Content.ReadAsStringAsync());
+        var entries = historyJson.RootElement.GetProperty("data").EnumerateArray().ToArray();
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Record created"));
+        Assert.Contains(entries, x => x.GetProperty("change").GetString()!.Contains("Effective Class"));
+        Assert.All(entries, x =>
+        {
+            Assert.Equal("Administrator", x.GetProperty("by").GetString());
+            Assert.Equal("Screen", x.GetProperty("source").GetString());
+            Assert.False(x.TryGetProperty("field", out _));
+        });
+    }
+
+    [Fact]
+    public async Task Custom_attribute_definition_list_filters_by_asset_type_data_type_and_class()
+    {
+        await AuthorizeAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var laptop = $"Laptop {suffix}";
+        var server = $"Server {suffix}";
+        var laptopType = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = laptop, code = $"L{suffix}", requiresSerialNumber = false,
+            active = true, moreInformation = false
+        });
+        var serverType = await _client.PostAsJsonAsync("/api/asset-types", new
+        {
+            name = server, code = $"S{suffix}", requiresSerialNumber = false,
+            active = true, moreInformation = false
+        });
+        Assert.Equal(HttpStatusCode.Created, laptopType.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, serverType.StatusCode);
+        using var laptopJson = JsonDocument.Parse(await laptopType.Content.ReadAsStringAsync());
+        var laptopId = laptopJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        Assert.Equal(HttpStatusCode.Created, (await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = laptop, code = $"ram_{suffix}", label = "Memory", dataType = "Number",
+            effectiveClass = "Recommended", active = "Yes", moreInformation = "No"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = server, code = $"disk_{suffix}", label = "Storage", dataType = "List",
+            listValues = new[] { "SSD", "HDD" }, effectiveClass = "Required",
+            active = "Yes", moreInformation = "Yes"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await _client.PostAsJsonAsync("/api/custom-attribute-definitions", new
+        {
+            assetType = laptop, code = $"psu_{suffix}", label = "Redundant power", dataType = "Yes or no",
+            effectiveClass = "Optional", active = "Yes", moreInformation = "No"
+        })).StatusCode);
+
+        async Task<string[]> CodesAsync(string query)
+        {
+            var response = await _client.GetAsync($"/api/custom-attribute-definitions?{query}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return json.RootElement.GetProperty("data").GetProperty("items")
+                .EnumerateArray().Select(x => x.GetProperty("code").GetString()!).ToArray();
+        }
+
+        var byName = await CodesAsync($"assetType={Uri.EscapeDataString(laptop)}");
+        Assert.Contains($"ram_{suffix}", byName);
+        Assert.Contains($"psu_{suffix}", byName);
+        Assert.DoesNotContain($"disk_{suffix}", byName);
+
+        var byPascalName = await CodesAsync($"AssetType={Uri.EscapeDataString(laptop)}");
+        Assert.Equal(byName.Order(), byPascalName.Order());
+
+        var byCode = await CodesAsync($"assetType=L{suffix}");
+        Assert.Contains($"ram_{suffix}", byCode);
+        Assert.DoesNotContain($"disk_{suffix}", byCode);
+
+        var byId = await CodesAsync($"assetType={laptopId}");
+        Assert.Contains($"ram_{suffix}", byId);
+        Assert.DoesNotContain($"disk_{suffix}", byId);
+
+        var byTypeId = await CodesAsync($"assetTypeId={laptopId}");
+        Assert.Contains($"ram_{suffix}", byTypeId);
+        Assert.DoesNotContain($"disk_{suffix}", byTypeId);
+
+        var numbers = await CodesAsync("dataType=Number");
+        Assert.Contains($"ram_{suffix}", numbers);
+        Assert.DoesNotContain($"disk_{suffix}", numbers);
+        Assert.DoesNotContain($"psu_{suffix}", numbers);
+
+        var lists = await CodesAsync("DataType=List");
+        Assert.Contains($"disk_{suffix}", lists);
+        Assert.DoesNotContain($"ram_{suffix}", lists);
+
+        var yesNo = await CodesAsync($"dataType={Uri.EscapeDataString("Yes or no")}");
+        Assert.Contains($"psu_{suffix}", yesNo);
+        Assert.DoesNotContain($"ram_{suffix}", yesNo);
+
+        var yesNoAlias = await CodesAsync("dataType=YesNo");
+        Assert.Contains($"psu_{suffix}", yesNoAlias);
+
+        var required = await CodesAsync("effectiveClass=Required");
+        Assert.Contains($"disk_{suffix}", required);
+        Assert.DoesNotContain($"ram_{suffix}", required);
+
+        var recommended = await CodesAsync("EffectiveClass=recommended");
+        Assert.Contains($"ram_{suffix}", recommended);
+        Assert.DoesNotContain($"disk_{suffix}", recommended);
+
+        var combined = await CodesAsync(
+            $"assetType={Uri.EscapeDataString(laptop)}&dataType=Number&effectiveClass=Recommended");
+        Assert.Contains($"ram_{suffix}", combined);
+        Assert.DoesNotContain($"psu_{suffix}", combined);
+        Assert.DoesNotContain($"disk_{suffix}", combined);
     }
 
     [Fact]
@@ -926,13 +1264,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     private static object ValidManufacturer(string code) => new
     {
-        name = $"Name {code}", code, active = "Yes", moreInformation = "No"
+        name = $"Name {code}", code, active = true, moreInformation = false
     };
 
     private static object ValidAssetType(string code) => new
     {
-        name = $"Name {code}", code, requiresSerialNumber = "No",
-        active = "Yes", moreInformation = "No"
+        name = $"Name {code}", code, requiresSerialNumber = false,
+        active = true, moreInformation = false
     };
 
     private static object ValidAssetStatus(string code) => new

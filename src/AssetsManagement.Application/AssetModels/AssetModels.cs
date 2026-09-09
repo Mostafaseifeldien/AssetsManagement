@@ -18,9 +18,9 @@ public sealed class AssetModelRequest
 {
     public string Name { get; init; } = "";
     public string? Manufacturer { get; init; }
-    public string ModelNumber { get; init; } = "";
-    public string? Active { get; init; }
-    public string? MoreInformation { get; init; }
+    public string? ModelNumber { get; init; }
+    public bool? Active { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? AlternateName { get; init; }
     public string? AssetType { get; init; }
     public string? Specifications { get; init; }
@@ -32,15 +32,15 @@ public sealed record AssetModelListItemDto(
     Guid Id,
     string Name,
     string Manufacturer,
-    string ModelNumber,
+    string? ModelNumber,
     bool Active);
 
 public sealed record AssetModelDetailDto(
     Guid Id,
     string Name,
     string Manufacturer,
-    string ModelNumber,
-    string Active,
+    string? ModelNumber,
+    bool Active,
     string? AlternateName,
     string? AssetType,
     string? Specifications,
@@ -84,12 +84,10 @@ public sealed class AssetModelRequestValidator : AbstractValidator<AssetModelReq
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Manufacturer).NotEmpty().MaximumLength(200)
             .WithMessage("Manufacturer is required.");
-        RuleFor(x => x.ModelNumber).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Active).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Active must be Yes or No.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
-        When(x => YesNoParser.TryParse(x.MoreInformation) == true, () =>
+        RuleFor(x => x.ModelNumber).MaximumLength(100);
+        RuleFor(x => x.Active).NotNull().WithMessage("Active is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
+        When(x => x.MoreInformation == true, () =>
         {
             RuleFor(x => x.AlternateName).MaximumLength(200);
             RuleFor(x => x.AssetType).MaximumLength(200);

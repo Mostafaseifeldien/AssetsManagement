@@ -15,9 +15,9 @@ public sealed class ManufacturerListQuery
 public sealed class ManufacturerRequest
 {
     public string Name { get; init; } = "";
-    public string Code { get; init; } = "";
-    public string? Active { get; init; }
-    public string? MoreInformation { get; init; }
+    public string? Code { get; init; }
+    public bool? Active { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? AlternateName { get; init; }
     public string? Country { get; init; }
     public string? SupportContact { get; init; }
@@ -30,7 +30,7 @@ public sealed record ManufacturerDetailDto(
     Guid Id,
     string Name,
     string Code,
-    string Active,
+    bool Active,
     string? AlternateName,
     string? Country,
     string? SupportContact,
@@ -71,18 +71,20 @@ public sealed class ManufacturerRequestValidator : AbstractValidator<Manufacture
     public ManufacturerRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Code).NotEmpty().MaximumLength(50)
-            .Matches("^[A-Za-z0-9][A-Za-z0-9._-]*$");
-        RuleFor(x => x.Active).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Active must be Yes or No.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
-        RuleFor(x => x.AlternateName).MaximumLength(200);
-        RuleFor(x => x.Country).MaximumLength(100);
-        RuleFor(x => x.SupportContact).MaximumLength(1000);
-        RuleFor(x => x.Website).MaximumLength(500)
-            .Must(x => Uri.TryCreate(x, UriKind.Absolute, out _))
-            .When(x => !string.IsNullOrWhiteSpace(x.Website) && YesNoParser.TryParse(x.MoreInformation) == true)
-            .WithMessage("Website must be a valid absolute URL.");
+        RuleFor(x => x.Code).MaximumLength(50)
+            .Matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
+        RuleFor(x => x.Active).NotNull().WithMessage("Active is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
+        When(x => x.MoreInformation == true, () =>
+        {
+            RuleFor(x => x.AlternateName).MaximumLength(200);
+            RuleFor(x => x.Country).MaximumLength(100);
+            RuleFor(x => x.SupportContact).MaximumLength(1000);
+            RuleFor(x => x.Website).MaximumLength(500)
+                .Must(x => Uri.TryCreate(x, UriKind.Absolute, out _))
+                .When(x => !string.IsNullOrWhiteSpace(x.Website))
+                .WithMessage("Website must be a valid absolute URL.");
+        });
     }
 }

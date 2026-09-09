@@ -113,16 +113,29 @@ public sealed class ValidationTests
     }
 
     [Fact]
-    public void Asset_category_validator_requires_name_and_active()
+    public void Asset_category_validator_requires_name_active_and_more_information()
     {
         var result = new AssetCategoryRequestValidator().Validate(new AssetCategoryRequest
         {
-            Name = "", Active = null
+            Name = "", Code = "", Active = null, MoreInformation = null
         });
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetCategoryRequest.Name));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetCategoryRequest.Code));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetCategoryRequest.Active));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetCategoryRequest.MoreInformation));
+    }
+
+    [Fact]
+    public void Asset_category_validator_accepts_empty_code()
+    {
+        var result = new AssetCategoryRequestValidator().Validate(new AssetCategoryRequest
+        {
+            Name = "IT Equipment", Code = "", Active = true, MoreInformation = false
+        });
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -130,7 +143,7 @@ public sealed class ValidationTests
     {
         var result = new AssetCategoryRequestValidator().Validate(new AssetCategoryRequest
         {
-            Name = "Network Equipment", Code = "NET", Active = true,
+            Name = "Network Equipment", Code = "NET", Active = true, MoreInformation = true,
             AlternateName = "معدات الشبكة", ParentCategory = "IT Equipment", AccountCode = "1520"
         });
 
@@ -138,7 +151,7 @@ public sealed class ValidationTests
     }
 
     [Fact]
-    public void Manufacturer_validator_requires_name_code_active_and_more_information()
+    public void Manufacturer_validator_requires_name_active_and_more_information()
     {
         var result = new ManufacturerRequestValidator().Validate(new ManufacturerRequest
         {
@@ -147,9 +160,20 @@ public sealed class ValidationTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(ManufacturerRequest.Name));
-        Assert.Contains(result.Errors, x => x.PropertyName == nameof(ManufacturerRequest.Code));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(ManufacturerRequest.Code));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(ManufacturerRequest.Active));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(ManufacturerRequest.MoreInformation));
+    }
+
+    [Fact]
+    public void Manufacturer_validator_accepts_empty_code()
+    {
+        var result = new ManufacturerRequestValidator().Validate(new ManufacturerRequest
+        {
+            Name = "Dell", Code = "", Active = true, MoreInformation = false
+        });
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -157,7 +181,7 @@ public sealed class ValidationTests
     {
         var result = new ManufacturerRequestValidator().Validate(new ManufacturerRequest
         {
-            Name = "Dell", Code = "DELL", Active = "Yes", MoreInformation = "Yes",
+            Name = "Dell", Code = "DELL", Active = true, MoreInformation = true,
             AlternateName = "ديل", Country = "United States",
             SupportContact = "support@dell.com", Website = "https://www.dell.com"
         });
@@ -166,7 +190,7 @@ public sealed class ValidationTests
     }
 
     [Fact]
-    public void Asset_type_validator_requires_name_code_active_and_more_information()
+    public void Asset_type_validator_requires_name_active_and_more_information()
     {
         var result = new AssetTypeRequestValidator().Validate(new AssetTypeRequest
         {
@@ -175,10 +199,23 @@ public sealed class ValidationTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.Name));
-        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.Code));
-        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.RequiresSerialNumber));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.Code));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.RequiresSerialNumber));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.RequiresBarcode));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.RequiresRfidTag));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.Active));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetTypeRequest.MoreInformation));
+    }
+
+    [Fact]
+    public void Asset_type_validator_accepts_empty_code_and_optional_flags()
+    {
+        var result = new AssetTypeRequestValidator().Validate(new AssetTypeRequest
+        {
+            Name = "Laptop", Code = "", Active = true, MoreInformation = false
+        });
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -186,10 +223,10 @@ public sealed class ValidationTests
     {
         var result = new AssetTypeRequestValidator().Validate(new AssetTypeRequest
         {
-            Name = "Laptop", Code = "LAPTOP", RequiresSerialNumber = "Yes",
+            Name = "Laptop", Code = "LAPTOP", RequiresSerialNumber = true,
             AssetCategory = "IT Equipment", DefaultStatus = "Working",
-            Active = "Yes", MoreInformation = "Yes",
-            AlternateName = "حاسوب محمول", RequiresRfidTag = "Yes", RequiresBarcode = "No",
+            Active = true, MoreInformation = true,
+            AlternateName = "حاسوب محمول", RequiresRfidTag = true, RequiresBarcode = false,
             DefaultDepreciationMethod = "Straight line", DefaultUsefulLife = 36,
             NumberingScheme = "LAP-#####"
         });
@@ -202,9 +239,9 @@ public sealed class ValidationTests
     {
         var result = new AssetTypeRequestValidator().Validate(new AssetTypeRequest
         {
-            Name = "Laptop", Code = "LAPTOP", RequiresSerialNumber = "Yes",
-            Active = "Yes", MoreInformation = "No",
-            AlternateName = "string", RequiresRfidTag = "string", RequiresBarcode = "string",
+            Name = "Laptop", Code = "LAPTOP", RequiresSerialNumber = true,
+            Active = true, MoreInformation = false,
+            AlternateName = "string", RequiresRfidTag = true, RequiresBarcode = true,
             PermittedStatusTransitions = "string", CustomAttributeSchema = "string",
             DefaultDepreciationMethod = "string", DefaultUsefulLife = 0,
             NumberingScheme = "string"
@@ -214,7 +251,7 @@ public sealed class ValidationTests
     }
 
     [Fact]
-    public void Asset_model_validator_requires_name_manufacturer_model_number_and_active()
+    public void Asset_model_validator_requires_name_manufacturer_active_and_more_information()
     {
         var result = new AssetModelRequestValidator().Validate(new AssetModelRequest
         {
@@ -224,9 +261,21 @@ public sealed class ValidationTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.Name));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.Manufacturer));
-        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.ModelNumber));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.ModelNumber));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.Active));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetModelRequest.MoreInformation));
+    }
+
+    [Fact]
+    public void Asset_model_validator_accepts_empty_model_number()
+    {
+        var result = new AssetModelRequestValidator().Validate(new AssetModelRequest
+        {
+            Name = "Latitude 5540", Manufacturer = "Dell", ModelNumber = "",
+            Active = true, MoreInformation = false
+        });
+
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -235,7 +284,7 @@ public sealed class ValidationTests
         var result = new AssetModelRequestValidator().Validate(new AssetModelRequest
         {
             Name = "Latitude 5540", Manufacturer = "Dell", ModelNumber = "5540",
-            Active = "Yes", MoreInformation = "No",
+            Active = true, MoreInformation = false,
             AlternateName = "string", AssetType = "string", Specifications = "string",
             ExpectedUsefulLife = 0, Documentation = "string"
         });
@@ -249,7 +298,7 @@ public sealed class ValidationTests
         var result = new AssetModelRequestValidator().Validate(new AssetModelRequest
         {
             Name = "Latitude 5540", Manufacturer = "Dell", ModelNumber = "5540",
-            Active = "Yes", MoreInformation = "Yes", ExpectedUsefulLife = 0
+            Active = true, MoreInformation = true, ExpectedUsefulLife = 0
         });
 
         Assert.False(result.IsValid);
@@ -413,5 +462,82 @@ public sealed class ValidationTests
         });
 
         Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Custom_attribute_validator_requires_screen_fields()
+    {
+        var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest());
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.AssetType));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.Code));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.Label));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.DataType));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.EffectiveClass));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.Active));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.MoreInformation));
+    }
+
+    [Fact]
+    public void Custom_attribute_validator_requires_list_values_for_list_type()
+    {
+        var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest
+        {
+            AssetType = "Laptop", Code = "disk", Label = "Storage", DataType = "List",
+            EffectiveClass = "Optional", Active = "Yes", MoreInformation = "No"
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.ListValues));
+    }
+
+    [Fact]
+    public void Custom_attribute_validator_accepts_prototype_field()
+    {
+        var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest
+        {
+            AssetType = "Laptop", Code = "ram_gb", Label = "Memory", DataType = "Number",
+            EffectiveClass = "Recommended", ShowInList = "Yes", Active = "Yes", MoreInformation = "Yes",
+            AlternateName = "الذاكرة", Unit = "GB", HelpText = "Installed RAM in gigabytes."
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Custom_attribute_validator_accepts_yes_or_no_data_type()
+    {
+        var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest
+        {
+            AssetType = "Server", Code = "psu", Label = "Redundant power", DataType = "Yes or no",
+            EffectiveClass = "Recommended", Active = "Yes", MoreInformation = "No"
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Custom_attribute_validator_rejects_unknown_data_type()
+    {
+        var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest
+        {
+            AssetType = "Laptop", Code = "notes", Label = "Notes", DataType = "Memo",
+            EffectiveClass = "Optional", Active = "Yes", MoreInformation = "No"
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(CustomAttributeDefinitionRequest.DataType));
+    }
+
+    [Theory]
+    [InlineData("YesNo", "Yes or no")]
+    [InlineData("yes or no", "Yes or no")]
+    [InlineData("Number", "Number")]
+    [InlineData("list", "List")]
+    public void Custom_attribute_data_type_aliases_match_screen(string input, string expected)
+    {
+        Assert.Equal(expected, CustomAttributeDefinitionRequestValidator.FormatDataType(input));
+        Assert.True(CustomAttributeDefinitionRequestValidator.IsDataType(input));
     }
 }

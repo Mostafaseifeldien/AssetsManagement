@@ -16,15 +16,15 @@ public sealed class AssetTypeListQuery
 public sealed class AssetTypeRequest
 {
     public string Name { get; init; } = "";
-    public string Code { get; init; } = "";
+    public string? Code { get; init; }
     public string? AssetCategory { get; init; }
-    public string? RequiresSerialNumber { get; init; }
+    public bool? RequiresSerialNumber { get; init; }
     public string? DefaultStatus { get; init; }
-    public string? Active { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? Active { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? AlternateName { get; init; }
-    public string? RequiresRfidTag { get; init; }
-    public string? RequiresBarcode { get; init; }
+    public bool? RequiresRfidTag { get; init; }
+    public bool? RequiresBarcode { get; init; }
     public string? PermittedStatusTransitions { get; init; }
     public string? CustomAttributeSchema { get; init; }
     public string? DefaultDepreciationMethod { get; init; }
@@ -46,12 +46,12 @@ public sealed record AssetTypeDetailDto(
     string Name,
     string Code,
     string? AssetCategory,
-    string RequiresSerialNumber,
+    bool RequiresSerialNumber,
     string? DefaultStatus,
-    string Active,
+    bool Active,
     string? AlternateName,
-    string RequiresRfidTag,
-    string RequiresBarcode,
+    bool RequiresRfidTag,
+    bool RequiresBarcode,
     string? PermittedStatusTransitions,
     string? CustomAttributeSchema,
     string? DefaultDepreciationMethod,
@@ -93,25 +93,16 @@ public sealed class AssetTypeRequestValidator : AbstractValidator<AssetTypeReque
     public AssetTypeRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Code).NotEmpty().MaximumLength(50)
-            .Matches("^[A-Za-z0-9][A-Za-z0-9._-]*$");
+        RuleFor(x => x.Code).MaximumLength(50)
+            .Matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
         RuleFor(x => x.AssetCategory).MaximumLength(200);
-        RuleFor(x => x.RequiresSerialNumber).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Requires serial number must be Yes or No.");
         RuleFor(x => x.DefaultStatus).MaximumLength(200);
-        RuleFor(x => x.Active).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Active must be Yes or No.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
-        When(x => YesNoParser.TryParse(x.MoreInformation) == true, () =>
+        RuleFor(x => x.Active).NotNull().WithMessage("Active is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
+        When(x => x.MoreInformation == true, () =>
         {
             RuleFor(x => x.AlternateName).MaximumLength(200);
-            RuleFor(x => x.RequiresRfidTag).Must(YesNoParser.IsYesNo)
-                .When(x => !string.IsNullOrWhiteSpace(x.RequiresRfidTag))
-                .WithMessage("Requires RFID tag must be Yes or No.");
-            RuleFor(x => x.RequiresBarcode).Must(YesNoParser.IsYesNo)
-                .When(x => !string.IsNullOrWhiteSpace(x.RequiresBarcode))
-                .WithMessage("Requires barcode must be Yes or No.");
             RuleFor(x => x.PermittedStatusTransitions).MaximumLength(4000);
             RuleFor(x => x.CustomAttributeSchema).MaximumLength(4000);
             RuleFor(x => x.DefaultDepreciationMethod).MaximumLength(100);

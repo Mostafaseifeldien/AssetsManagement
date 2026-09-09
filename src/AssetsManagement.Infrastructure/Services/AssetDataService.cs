@@ -184,24 +184,32 @@ public sealed class AssetDataService(
         if (!await db.AssetTypes.AnyAsync(x => x.Id == assetTypeId && x.IsActive, cancellationToken))
             throw new NotFoundException("Asset type was not found.");
         if (await db.AssetTypeAttributes.AnyAsync(x => x.AssetTypeId == assetTypeId &&
-            x.CustomAttributeDefinition.Code == request.Code, cancellationToken))
-            throw new ConflictException("That attribute code already exists on this asset type.");
+            x.CustomAttributeDefinition.Code == request.Code.Trim(), cancellationToken))
+            throw new ConflictException("That code already exists on this type.");
+        var dataType = Enum.TryParse<CustomAttributeDataType>(NormalizeDataType(request.DataType), true, out var type)
+            ? type : CustomAttributeDataType.Text;
+        var order = request.DisplayOrder is > 0
+            ? request.DisplayOrder.Value
+            : (await db.AssetTypeAttributes.Where(x => x.AssetTypeId == assetTypeId)
+                .MaxAsync(x => (int?)x.DisplayOrder, cancellationToken) ?? 0) + 1;
         if (await db.AssetTypeAttributes.AnyAsync(x => x.AssetTypeId == assetTypeId &&
-            x.DisplayOrder == request.DisplayOrder && x.IsActive, cancellationToken))
+            x.DisplayOrder == order, cancellationToken))
             throw new ConflictException("That display order is already used on this asset type.");
         var definition = new CustomAttributeDefinition
         {
             Code = request.Code.Trim(), Name = request.Label.Trim(), AlternateName = request.AlternateName,
-            DataType = Enum.TryParse<CustomAttributeDataType>(NormalizeDataType(request.DataType), true, out var type)
-                ? type : CustomAttributeDataType.Text,
-            ListValuesJson = request.ListValues is null ? null : JsonSerializer.Serialize(request.ListValues),
-            Unit = request.Unit, HelpText = request.HelpText, AlternateHelpText = request.AlternateHelpText
+            DataType = dataType,
+            ListValuesJson = dataType == CustomAttributeDataType.List && request.ListValues is not null
+                ? JsonSerializer.Serialize(request.ListValues) : null,
+            Unit = string.IsNullOrWhiteSpace(request.Unit) ? null : request.Unit.Trim(),
+            HelpText = string.IsNullOrWhiteSpace(request.HelpText) ? null : request.HelpText.Trim(),
+            AlternateHelpText = string.IsNullOrWhiteSpace(request.AlternateHelpText) ? null : request.AlternateHelpText.Trim()
         };
         var assignment = new AssetTypeAttribute
         {
             AssetTypeId = assetTypeId, CustomAttributeDefinition = definition,
             Requirement = Enum.Parse<AttributeRequirement>(request.Requirement),
-            DisplayOrder = request.DisplayOrder, ShowInList = request.ShowInList
+            DisplayOrder = order, ShowInList = request.ShowInList
         };
         db.AssetTypeAttributes.Add(assignment);
         await SaveAsync(cancellationToken);
@@ -316,7 +324,7 @@ public sealed class AssetDataService(
             case AssetModel x:
                 x.ManufacturerId = request.ManufacturerId ?? Guid.Empty;
                 x.AssetTypeId = request.AssetTypeId;
-                x.ModelNumber = request.ModelNumber?.Trim() ?? "";
+                x.ModelNumber = string.IsNullOrWhiteSpace(request.ModelNumber) ? "" : request.ModelNumber.Trim();
                 x.Specifications = request.Specifications;
                 x.ExpectedUsefulLifeMonths = request.ExpectedUsefulLifeMonths;
                 x.Documentation = request.Documentation;
@@ -374,8 +382,6 @@ public sealed class AssetDataService(
         }
         if (entity is AssetModel model)
         {
-            if (string.IsNullOrWhiteSpace(model.ModelNumber))
-                throw new DomainRuleException("Model number is required.");
             if (model.ManufacturerId == Guid.Empty ||
                 !await db.Manufacturers.AnyAsync(x => x.Id == model.ManufacturerId && x.IsActive, cancellationToken))
                 throw new NotFoundException("Manufacturer was not found.");
@@ -442,8 +448,17 @@ public sealed class AssetDataService(
     private static TypeAttributeDto ToTypeAttributeDto(AssetTypeAttribute x) =>
         new(x.Id, x.AssetTypeId, x.AssetType.Name, x.CustomAttributeDefinitionId,
             x.CustomAttributeDefinition.Code, x.CustomAttributeDefinition.Name,
-            x.CustomAttributeDefinition.DataType.ToString(), x.Requirement.ToString(),
-            x.DisplayOrder, x.ShowInList, x.IsActive);
+            x.CustomAttributeDefinition.DataType == CustomAttributeDataType.YesNo
+                ? "Yes or no" : x.CustomAttributeDefinition.DataType.ToString(),
+            x.Requirement.ToString(), x.DisplayOrder, x.ShowInList, x.IsActive,
+            DeserializeList(x.CustomAttributeDefinition.ListValuesJson),
+            x.CustomAttributeDefinition.Unit, x.CustomAttributeDefinition.HelpText);
+
+    private static IReadOnlyCollection<string>? DeserializeList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        return JsonSerializer.Deserialize<string[]>(json);
+    }
 
     private async Task EnsureTypeAndDefinitionAsync(TypeAttributeRequest request, CancellationToken cancellationToken)
     {
