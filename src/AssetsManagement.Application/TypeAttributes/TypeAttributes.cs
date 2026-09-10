@@ -92,6 +92,7 @@ public interface IAssetTypeAttributeService
         Guid? assetTypeId, TypeAttributeFieldRequest request, CancellationToken cancellationToken);
     Task<TypeAttributeDetailDto> UpdateFieldAsync(
         Guid id, TypeAttributeFieldRequest request, CancellationToken cancellationToken);
+    Task<TypeAttributeDetailDto> RetireAsync(Guid id, CancellationToken cancellationToken);
     Task DeactivateAsync(Guid id, CancellationToken cancellationToken);
     Task<TypeAttributeDetailDto> RestoreAsync(Guid id, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(string code, string? assetType, Guid? excludingId, CancellationToken cancellationToken);

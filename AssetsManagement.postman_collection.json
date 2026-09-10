@@ -363,6 +363,10 @@
           }
         },
         {
+          "name": "Retire Type Attribute",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}/retire" }
+        },
+        {
           "name": "Deactivate Type Attribute",
           "request": { "method": "DELETE", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}" }
         },

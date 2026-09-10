@@ -110,6 +110,16 @@ public sealed class AssetTypeAttributesController(IAssetTypeAttributeService ser
         Ok(ApiResponse<TypeAttributeDetailDto>.Ok(
             await service.UpdateFieldAsync(id, request, cancellationToken), "Type attribute updated successfully."));
 
+    [HttpPost("{id:guid}/retire")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<TypeAttributeDetailDto>>> Retire(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var result = await service.RetireAsync(id, cancellationToken);
+        return Ok(ApiResponse<TypeAttributeDetailDto>.Ok(result,
+            result.Active ? "Record restored successfully." : "Record retired successfully."));
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)

@@ -768,15 +768,15 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var existsJson = JsonDocument.Parse(await exists.Content.ReadAsStringAsync());
         Assert.True(existsJson.RootElement.GetProperty("data").GetBoolean());
 
-        var retire = await _client.DeleteAsync($"/api/asset-type-attributes/{id}");
-        Assert.Equal(HttpStatusCode.NoContent, retire.StatusCode);
-        var retiredList = await _client.GetAsync($"/api/asset-types/{typeId}/attributes");
-        using var retiredJson = JsonDocument.Parse(await retiredList.Content.ReadAsStringAsync());
-        Assert.False(retiredJson.RootElement.GetProperty("data").GetProperty("items")[0]
-            .GetProperty("active").GetBoolean());
+        var retire = await _client.PostAsync($"/api/asset-type-attributes/{id}/retire", new StringContent(""));
+        Assert.Equal(HttpStatusCode.OK, retire.StatusCode);
+        using var retiredJson = JsonDocument.Parse(await retire.Content.ReadAsStringAsync());
+        Assert.False(retiredJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
 
-        var restore = await _client.PostAsync($"/api/asset-type-attributes/{id}/restore", new StringContent(""));
-        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var bringBack = await _client.PostAsync($"/api/asset-type-attributes/{id}/retire", new StringContent(""));
+        Assert.Equal(HttpStatusCode.OK, bringBack.StatusCode);
+        using var restoredJson = JsonDocument.Parse(await bringBack.Content.ReadAsStringAsync());
+        Assert.True(restoredJson.RootElement.GetProperty("data").GetProperty("active").GetBoolean());
     }
 
     [Fact]

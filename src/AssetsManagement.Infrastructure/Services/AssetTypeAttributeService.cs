@@ -109,6 +109,25 @@ public sealed class AssetTypeAttributeService(
         return await MapDetailAsync(await FindAsync(id, cancellationToken, asNoTracking: true), cancellationToken);
     }
 
+    public async Task<TypeAttributeDetailDto> RetireAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var assignment = await FindAsync(id, cancellationToken, asNoTracking: false);
+        if (assignment.IsActive)
+        {
+            assignment.IsActive = false;
+            assignment.DeletedAtUtc = DateTime.UtcNow;
+            assignment.DeletedBy = currentUser.UserName;
+        }
+        else
+        {
+            assignment.IsActive = true;
+            assignment.DeletedAtUtc = null;
+            assignment.DeletedBy = null;
+        }
+        await SaveAsync(cancellationToken);
+        return await MapDetailAsync(await FindAsync(id, cancellationToken, asNoTracking: true), cancellationToken);
+    }
+
     public async Task DeactivateAsync(Guid id, CancellationToken cancellationToken)
     {
         var assignment = await FindAsync(id, cancellationToken, asNoTracking: false);
