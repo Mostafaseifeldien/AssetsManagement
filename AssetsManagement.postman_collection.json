@@ -202,7 +202,19 @@
         },
         {
           "name": "List Type Attributes",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes?pageNumber=1&pageSize=20" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes" }
+        },
+        {
+          "name": "Grouped Type Attributes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes/grouped" }
+        },
+        {
+          "name": "Type Attribute Type Options",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes/types" }
+        },
+        {
+          "name": "Type Attribute Exists",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes/exists?code=memory_gb&assetType=" }
         }
       ]
     },
@@ -315,20 +327,29 @@
           "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}" }
         },
         {
-          "name": "Assign Type Attribute",
+          "name": "Create Type Attribute",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"assetTypeId\":\"{{recordId}}\",\"customAttributeDefinitionId\":\"00000000-0000-0000-0000-000000000000\",\"requirement\":\"Optional\",\"displayOrder\":1,\"showInList\":true}" },
+            "body": { "mode": "raw", "raw": "{\"assetType\":\"{{recordId}}\",\"displayOrder\":0,\"label\":\"Memory\",\"alternateName\":\"الذاكرة\",\"code\":\"memory_gb\",\"dataType\":\"Number\",\"unit\":\"GB\",\"class\":\"Recommended\",\"showInList\":true,\"helpText\":\"Installed RAM in gigabytes.\"}" },
             "url": "{{baseUrl}}/api/asset-type-attributes"
           }
         },
         {
-          "name": "Create and Assign Type Attribute Definition",
+          "name": "Create Type Attribute Field",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"code\":\"memory_gb\",\"label\":\"Memory\",\"dataType\":\"Number\",\"unit\":\"GB\",\"requirement\":\"Recommended\",\"displayOrder\":1,\"showInList\":true}" },
+            "body": { "mode": "raw", "raw": "{\"assetType\":\"{{recordId}}\",\"code\":\"os\",\"label\":\"Operating system\",\"dataType\":\"List\",\"possibleValues\":[\"Windows 11\",\"Windows 10\",\"Ubuntu 24.04\",\"macOS\"],\"class\":\"Optional\",\"showInList\":false}" },
+            "url": "{{baseUrl}}/api/asset-type-attributes/fields"
+          }
+        },
+        {
+          "name": "Create Type Attribute For Type",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"code\":\"memory_gb\",\"label\":\"Memory\",\"alternateName\":\"الذاكرة\",\"dataType\":\"Number\",\"unit\":\"GB\",\"class\":\"Recommended\",\"displayOrder\":-2,\"showInList\":true,\"helpText\":\"Installed RAM in gigabytes.\"}" },
             "url": "{{baseUrl}}/api/asset-types/{{recordId}}/attributes"
           }
         },
@@ -337,7 +358,7 @@
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"assetTypeId\":\"{{recordId}}\",\"customAttributeDefinitionId\":\"00000000-0000-0000-0000-000000000000\",\"requirement\":\"Required\",\"displayOrder\":1,\"showInList\":true}" },
+            "body": { "mode": "raw", "raw": "{\"assetType\":\"{{recordId}}\",\"code\":\"memory_gb\",\"label\":\"Memory\",\"alternateName\":\"الذاكرة\",\"dataType\":\"Number\",\"unit\":\"GB\",\"class\":\"Required\",\"displayOrder\":1,\"showInList\":true,\"helpText\":\"Installed RAM in gigabytes.\"}" },
             "url": "{{baseUrl}}/api/asset-type-attributes/{{typeAttributeId}}"
           }
         },

@@ -533,6 +533,67 @@ public sealed class ValidationTests
     }
 
     [Fact]
+    public void Type_attribute_field_validator_requires_screen_fields()
+    {
+        var result = new TypeAttributeFieldRequestValidator().Validate(new TypeAttributeFieldRequest());
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.Code));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.Label));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.DataType));
+        Assert.DoesNotContain(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.ShowInList));
+    }
+
+    [Fact]
+    public void Type_attribute_field_validator_requires_two_list_values()
+    {
+        var result = new TypeAttributeFieldRequestValidator().Validate(new TypeAttributeFieldRequest
+        {
+            Code = "finish", Label = "Finish", DataType = "List", Class = "Optional",
+            PossibleValues = ["Only one"]
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.PossibleValues));
+    }
+
+    [Fact]
+    public void Type_attribute_field_validator_omits_possible_values_unless_list()
+    {
+        var result = new TypeAttributeFieldRequestValidator().Validate(new TypeAttributeFieldRequest
+        {
+            AssetType = "Laptop", Code = "notes", Label = "Notes", DataType = "Text", Class = "Optional"
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Type_attribute_field_validator_accepts_prototype_field()
+    {
+        var result = new TypeAttributeFieldRequestValidator().Validate(new TypeAttributeFieldRequest
+        {
+            AssetType = "Laptop", Code = "memory_gb", Label = "Memory", AlternateName = "الذاكرة",
+            DataType = "Number", Unit = "GB", Class = "Recommended", DisplayOrder = -2,
+            HelpText = "Installed RAM in gigabytes."
+        });
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Type_attribute_field_validator_rejects_reference_data_type()
+    {
+        var result = new TypeAttributeFieldRequestValidator().Validate(new TypeAttributeFieldRequest
+        {
+            Code = "owner", Label = "Owner", DataType = "Reference", Class = "Optional"
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(TypeAttributeFieldRequest.DataType));
+    }
+
+    [Fact]
     public void Custom_attribute_validator_rejects_unknown_data_type()
     {
         var result = new CustomAttributeDefinitionRequestValidator().Validate(new CustomAttributeDefinitionRequest

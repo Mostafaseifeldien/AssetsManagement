@@ -11,13 +11,5 @@ public interface IAssetDataService
     Task<IReadOnlyCollection<LookupDto>> LookupAsync(AssetDataResource resource, string? search, CancellationToken cancellationToken);
     Task<bool> ExistsAsync(AssetDataResource resource, string code, Guid? excludingId, CancellationToken cancellationToken);
 
-    Task<PagedResult<TypeAttributeDto>> ListTypeAttributesAsync(ListQuery query, CancellationToken cancellationToken);
-    Task<TypeAttributeDto> GetTypeAttributeAsync(Guid id, CancellationToken cancellationToken);
-    Task<TypeAttributeDto> CreateTypeAttributeAsync(TypeAttributeRequest request, CancellationToken cancellationToken);
-    Task<TypeAttributeDto> CreateTypeAttributeDefinitionAsync(Guid assetTypeId, CreateTypeAttributeDefinitionRequest request, CancellationToken cancellationToken);
-    Task<TypeAttributeDto> UpdateTypeAttributeAsync(Guid id, TypeAttributeRequest request, CancellationToken cancellationToken);
-    Task DeactivateTypeAttributeAsync(Guid id, CancellationToken cancellationToken);
-    Task<TypeAttributeDto> RestoreTypeAttributeAsync(Guid id, CancellationToken cancellationToken);
-
     Task<IReadOnlyCollection<AssetLookupDto>> AssetLookupAsync(string? search, CancellationToken cancellationToken);
 }

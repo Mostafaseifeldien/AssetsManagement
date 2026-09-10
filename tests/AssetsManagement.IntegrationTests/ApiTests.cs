@@ -647,36 +647,136 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var typeId = typeJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
         var code = $"field_{Guid.NewGuid():N}";
 
-        var response = await _client.PostAsJsonAsync($"/api/asset-types/{typeId}/attributes", new
+        var response = await _client.PostAsJsonAsync("/api/asset-type-attributes", new
         {
-            code, label = "Prototype Field", dataType = "List",
-            listValues = new[] { "One", "Two" }, requirement = "Required",
-            showInList = true, unit = "GB", helpText = "Installed storage options."
+            assetType = typeId.ToString(), code, label = "Prototype Field",
+            alternateName = "حقل تجريبي", dataType = "List",
+            possibleValues = new[] { "One", "Two" }, @class = "Required",
+            showInList = true, helpText = "Installed storage options."
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var data = json.RootElement.GetProperty("data");
+        var id = data.GetProperty("id").GetGuid();
         Assert.Equal(code, data.GetProperty("code").GetString());
+        Assert.Equal("Prototype Field", data.GetProperty("label").GetString());
+        Assert.Equal("حقل تجريبي", data.GetProperty("alternateName").GetString());
         Assert.True(data.GetProperty("showInList").GetBoolean());
         Assert.Equal("List", data.GetProperty("dataType").GetString());
-        Assert.Equal("GB", data.GetProperty("unit").GetString());
+        Assert.Null(data.GetProperty("unit").GetString());
         Assert.Equal("Installed storage options.", data.GetProperty("helpText").GetString());
-        Assert.Equal(["One", "Two"], data.GetProperty("listValues")
+        Assert.Equal(["One", "Two"], data.GetProperty("possibleValues")
             .EnumerateArray().Select(x => x.GetString()).ToArray());
+        Assert.Equal("Required", data.GetProperty("class").GetString());
         Assert.True(data.GetProperty("displayOrder").GetInt32() >= 1);
+        Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("codeIsLocked").GetBoolean() is false);
+        Assert.True(data.TryGetProperty("assetCount", out _));
+        Assert.False(data.TryGetProperty("requirement", out _));
+
+        var tooFew = await _client.PostAsJsonAsync($"/api/asset-types/{typeId}/attributes", new
+        {
+            code = $"few_{Guid.NewGuid():N}"[..12].ToLowerInvariant(),
+            label = "Finish", dataType = "List", possibleValues = new[] { "One" },
+            @class = "Optional"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, tooFew.StatusCode);
 
         var listed = await _client.GetAsync($"/api/asset-types/{typeId}/attributes");
         Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
         using var listedJson = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
         var item = listedJson.RootElement.GetProperty("data").GetProperty("items")[0];
         Assert.Equal("Prototype Field", item.GetProperty("label").GetString());
+        Assert.Equal("حقل تجريبي", item.GetProperty("alternateName").GetString());
         Assert.Equal(code, item.GetProperty("code").GetString());
         Assert.Equal("List", item.GetProperty("dataType").GetString());
-        Assert.Equal("Required", item.GetProperty("requirement").GetString());
-        Assert.Equal("GB", item.GetProperty("unit").GetString());
+        Assert.Equal("Required", item.GetProperty("class").GetString());
+        Assert.Null(item.GetProperty("unit").GetString());
         Assert.True(item.GetProperty("showInList").GetBoolean());
         Assert.Equal("Installed storage options.", item.GetProperty("helpText").GetString());
+        Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.TryGetProperty("displayOrder", out _));
+        Assert.False(item.TryGetProperty("codeIsLocked", out _));
+
+        var grouped = await _client.GetAsync($"/api/asset-type-attributes?assetType={typeId}");
+        Assert.Equal(HttpStatusCode.OK, grouped.StatusCode);
+        using var groupedJson = JsonDocument.Parse(await grouped.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Array, groupedJson.RootElement.GetProperty("data").ValueKind);
+        var group = groupedJson.RootElement.GetProperty("data").EnumerateArray()
+            .Single(x => x.GetProperty("assetTypeId").GetGuid() == typeId);
+        Assert.Equal(typeJson.RootElement.GetProperty("data").GetProperty("name").GetString(),
+            group.GetProperty("assetType").GetString());
+        Assert.True(group.GetProperty("extraFields").GetInt32() >= 1);
+        Assert.True(group.TryGetProperty("assetCount", out _));
+        var groupedItem = group.GetProperty("attributes")[0];
+        Assert.Equal(code, groupedItem.GetProperty("code").GetString());
+        Assert.Equal("Prototype Field", groupedItem.GetProperty("label").GetString());
+        Assert.Equal("List", groupedItem.GetProperty("dataType").GetString());
+        Assert.Equal("Required", groupedItem.GetProperty("class").GetString());
+
+        var updated = await _client.PutAsJsonAsync($"/api/asset-type-attributes/{id}", new
+        {
+            assetType = typeId.ToString(), code, label = "Storage", alternateName = "حقل تجريبي",
+            dataType = "List", possibleValues = new[] { "One", "Two", "Three" }, @class = "Recommended",
+            displayOrder = -2, showInList = false, helpText = "Updated help."
+        });
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        using var updatedJson = JsonDocument.Parse(await updated.Content.ReadAsStringAsync());
+        var saved = updatedJson.RootElement.GetProperty("data");
+        Assert.Equal("Storage", saved.GetProperty("label").GetString());
+        Assert.Equal("Recommended", saved.GetProperty("class").GetString());
+        Assert.Equal(-2, saved.GetProperty("displayOrder").GetInt32());
+        Assert.False(saved.GetProperty("showInList").GetBoolean());
+        Assert.Null(saved.GetProperty("unit").GetString());
+        Assert.Equal("Updated help.", saved.GetProperty("helpText").GetString());
+
+        var types = await _client.GetAsync("/api/asset-type-attributes/types");
+        Assert.Equal(HttpStatusCode.OK, types.StatusCode);
+        using var typesJson = JsonDocument.Parse(await types.Content.ReadAsStringAsync());
+        var typeOption = typesJson.RootElement.GetProperty("data").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetGuid() == typeId);
+        Assert.True(typeOption.TryGetProperty("assetCount", out _));
+        Assert.Equal(typeJson.RootElement.GetProperty("data").GetProperty("name").GetString(),
+            typeOption.GetProperty("name").GetString());
+
+        var numberOnly = await _client.PostAsJsonAsync("/api/asset-type-attributes", new
+        {
+            assetType = typeId.ToString(),
+            code = $"ram_{Guid.NewGuid():N}"[..12].ToLowerInvariant(),
+            label = "Memory", dataType = "Number", unit = "GB", @class = "Recommended",
+            displayOrder = 0, helpText = "Installed RAM in gigabytes."
+        });
+        Assert.Equal(HttpStatusCode.Created, numberOnly.StatusCode);
+        using var numberJson = JsonDocument.Parse(await numberOnly.Content.ReadAsStringAsync());
+        var number = numberJson.RootElement.GetProperty("data");
+        Assert.Equal("Number", number.GetProperty("dataType").GetString());
+        Assert.Equal("GB", number.GetProperty("unit").GetString());
+        Assert.True(number.TryGetProperty("possibleValues", out var ignoredValues) &&
+            (ignoredValues.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined));
+
+        var reference = await _client.PostAsJsonAsync("/api/asset-type-attributes", new
+        {
+            assetType = typeId.ToString(),
+            code = $"ref_{Guid.NewGuid():N}"[..12].ToLowerInvariant(),
+            label = "Owner", dataType = "Reference", @class = "Optional"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, reference.StatusCode);
+
+        var exists = await _client.GetAsync(
+            $"/api/asset-type-attributes/exists?code={code}&assetType={typeId}");
+        using var existsJson = JsonDocument.Parse(await exists.Content.ReadAsStringAsync());
+        Assert.True(existsJson.RootElement.GetProperty("data").GetBoolean());
+
+        var retire = await _client.DeleteAsync($"/api/asset-type-attributes/{id}");
+        Assert.Equal(HttpStatusCode.NoContent, retire.StatusCode);
+        var retiredList = await _client.GetAsync($"/api/asset-types/{typeId}/attributes");
+        using var retiredJson = JsonDocument.Parse(await retiredList.Content.ReadAsStringAsync());
+        Assert.False(retiredJson.RootElement.GetProperty("data").GetProperty("items")[0]
+            .GetProperty("active").GetBoolean());
+
+        var restore = await _client.PostAsync($"/api/asset-type-attributes/{id}/restore", new StringContent(""));
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
     }
 
     [Fact]
