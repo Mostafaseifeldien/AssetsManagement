@@ -21,11 +21,11 @@ public sealed class AssetStatusRequest
     public string Name { get; init; } = "";
     public string? StatusCategory { get; init; }
     public string? Color { get; init; }
-    public string? IsOperational { get; init; }
-    public string? IsTerminal { get; init; }
-    public string? BlocksMovement { get; init; }
-    public string? Active { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? IsOperational { get; init; }
+    public bool? IsTerminal { get; init; }
+    public bool? BlocksMovement { get; init; }
+    public bool? Active { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? AlternateName { get; init; }
 }
 
@@ -36,7 +36,9 @@ public sealed record AssetStatusListItemDto(
     string StatusCategory,
     string Color,
     bool IsOperational,
-    bool IsTerminal);
+    bool IsTerminal,
+    bool Active,
+    bool MoreInformation);
 
 public sealed record AssetStatusDetailDto(
     Guid Id,
@@ -44,10 +46,11 @@ public sealed record AssetStatusDetailDto(
     string Name,
     string StatusCategory,
     string Color,
-    string IsOperational,
-    string IsTerminal,
-    string BlocksMovement,
-    string Active,
+    bool IsOperational,
+    bool IsTerminal,
+    bool BlocksMovement,
+    bool Active,
+    bool MoreInformation,
     string? AlternateName,
     int SortOrder,
     string Lifecycle,
@@ -100,17 +103,10 @@ public sealed class AssetStatusRequestValidator : AbstractValidator<AssetStatusR
             .WithMessage("Status category must be Working, Damaged, In Maintenance, Missing, In Transit, Disposed or Unknown.");
         RuleFor(x => x.Color).NotEmpty().Matches("^#[0-9A-Fa-f]{6}$")
             .WithMessage("Color must be a hex value such as #16a34a.");
-        RuleFor(x => x.IsOperational).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Is operational must be Yes or No.");
-        RuleFor(x => x.IsTerminal).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Is terminal must be Yes or No.");
-        RuleFor(x => x.BlocksMovement).Must(YesNoParser.IsYesNo)
-            .When(x => !string.IsNullOrWhiteSpace(x.BlocksMovement))
-            .WithMessage("Blocks movement must be Yes or No.");
-        RuleFor(x => x.Active).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Active must be Yes or No.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
+        RuleFor(x => x.IsOperational).NotNull().WithMessage("Is operational is required.");
+        RuleFor(x => x.IsTerminal).NotNull().WithMessage("Is terminal is required.");
+        RuleFor(x => x.Active).NotNull().WithMessage("Active is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
         RuleFor(x => x.AlternateName).MaximumLength(200);
     }
 

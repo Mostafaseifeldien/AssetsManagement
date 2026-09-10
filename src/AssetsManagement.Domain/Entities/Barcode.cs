@@ -11,4 +11,5 @@ public sealed class Barcode : AuditableEntity
     public DateTime? PrintedAtUtc { get; set; }
     public Guid? ReplacedById { get; set; }
     public Barcode? ReplacedBy { get; set; }
+    public bool MoreInformation { get; set; }
 }

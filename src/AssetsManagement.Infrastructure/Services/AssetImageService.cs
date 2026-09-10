@@ -34,6 +34,12 @@ public sealed class AssetImageService(
             else
                 source = source.Where(x => x.Asset.Name == asset || x.Asset.AssetNumber == asset);
         }
+        if (!string.IsNullOrWhiteSpace(query.CreatedBy))
+        {
+            var createdBy = query.CreatedBy.Trim();
+            source = source.Where(x => x.CreatedBy.Contains(createdBy) ||
+                (x.CapturedBy != null && x.CapturedBy.Contains(createdBy)));
+        }
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim();
@@ -60,7 +66,7 @@ public sealed class AssetImageService(
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new AssetImageListItemDto(
-                x.Id, x.Asset.Name, x.OriginalFileName, x.IsPrimary, x.Purpose))
+                x.Id, x.Asset.Name, x.OriginalFileName, x.IsPrimary, x.MoreInformation, x.Purpose))
             .ToArrayAsync(cancellationToken);
         return Page(rows, query.PageNumber, query.PageSize, total);
     }
@@ -76,9 +82,8 @@ public sealed class AssetImageService(
             !AssetImageRequestValidator.IsPurpose(request.Purpose))
             throw new Domain.DomainRuleException(
                 "Purpose must be Identification, Condition record, Damage evidence or Nameplate.");
-        var includeCaption = string.IsNullOrWhiteSpace(request.MoreInformation)
-            || YesNoParser.TryParse(request.MoreInformation) == true;
-        var wantPrimary = YesNoParser.TryParse(request.IsPrimary) == true;
+        var includeCaption = request.MoreInformation == true;
+        var wantPrimary = request.IsPrimary == true;
         var extension = Path.GetExtension(upload.OriginalFileName);
         var stored = await files.SaveAsync(upload.Content, extension, cancellationToken);
         var entity = new AssetImage
@@ -90,6 +95,7 @@ public sealed class AssetImageService(
             SizeBytes = upload.SizeBytes,
             Purpose = NullIfEmpty(request.Purpose),
             Caption = includeCaption ? NullIfEmpty(request.Caption) : null,
+            MoreInformation = includeCaption,
             CapturedAtUtc = DateTime.UtcNow,
             CapturedBy = currentUser.DisplayName
         };
@@ -122,8 +128,8 @@ public sealed class AssetImageService(
         var entity = await FindAsync(id, cancellationToken, asNoTracking: false);
         EnsureUnlocked(entity);
         var asset = await ResolveAssetAsync(request.Asset, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
-        var wantPrimary = YesNoParser.TryParse(request.IsPrimary) == true;
+        var includeMore = request.MoreInformation == true;
+        var wantPrimary = request.IsPrimary == true;
         var oldAssetId = entity.AssetId;
 
         Track(entity.Id, "Asset", entity.Asset.Name, asset.Name);
@@ -135,6 +141,7 @@ public sealed class AssetImageService(
         entity.AssetId = asset.Id;
         entity.Asset = asset;
         entity.Purpose = NullIfEmpty(request.Purpose);
+        entity.MoreInformation = includeMore;
         if (includeMore)
             entity.Caption = NullIfEmpty(request.Caption);
         if (wantPrimary)
@@ -289,7 +296,7 @@ public sealed class AssetImageService(
 
     private static AssetImageDetailDto MapDetail(AssetImage entity) =>
         new(entity.Id, entity.Asset.Name, entity.OriginalFileName,
-            YesNoParser.Format(entity.IsPrimary), entity.Purpose, entity.Caption,
+            entity.IsPrimary, entity.MoreInformation, entity.Purpose, entity.Caption,
             entity.CapturedAtUtc, entity.CapturedBy, IsLocked(entity),
             $"/api/asset-images/{entity.Id}/content", Lifecycle);
 

@@ -7,6 +7,7 @@ public sealed class AssetStatus : CodedMasterEntity
     public bool IsOperational { get; set; }
     public bool IsTerminal { get; set; }
     public bool BlocksMovement { get; set; }
+    public bool MoreInformation { get; set; }
     public int DisplayOrder { get; set; }
     public ICollection<AssetStatusTransition> AllowedFrom { get; set; } = [];
     public ICollection<AssetStatusTransition> AllowedTo { get; set; } = [];

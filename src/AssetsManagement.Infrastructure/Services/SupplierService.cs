@@ -58,7 +58,7 @@ public sealed class SupplierService(
             .Select(x => new SupplierListItemDto(
                 x.Id, x.Code, x.Name,
                 x.SupplierKind == "" ? null : x.SupplierKind,
-                x.ContactPerson, x.Telephone, x.Email))
+                x.ContactPerson, x.Telephone, x.Email, x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -72,7 +72,7 @@ public sealed class SupplierService(
         SupplierRequest request, CancellationToken cancellationToken)
     {
         await EnsureUniqueCodeAsync(request.Code, null, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         if (includeMore)
         {
             await EnsureUniqueTaxAsync(request.TaxRegistration, null, cancellationToken);
@@ -116,7 +116,7 @@ public sealed class SupplierService(
     {
         var entity = await FindAsync(id, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, id, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         if (includeMore)
         {
             await EnsureUniqueTaxAsync(request.TaxRegistration, id, cancellationToken);
@@ -131,7 +131,7 @@ public sealed class SupplierService(
         Track(entity.Id, "Email", entity.Email, NullIfEmpty(request.Email));
         Track(entity.Id, "Country", entity.Country, NullIfEmpty(request.Country));
         Track(entity.Id, "Active", YesNoParser.Format(entity.IsActive),
-            YesNoParser.Format(YesNoParser.TryParse(request.Active) == true));
+            YesNoParser.Format(request.Active == true));
         if (includeMore)
         {
             Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
@@ -212,7 +212,8 @@ public sealed class SupplierService(
         entity.Telephone = NullIfEmpty(request.Telephone);
         entity.Email = NullIfEmpty(request.Email);
         entity.Country = NullIfEmpty(request.Country);
-        entity.IsActive = YesNoParser.TryParse(request.Active) == true;
+        entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
         {
             entity.AlternateName = NullIfEmpty(request.AlternateName);
@@ -260,7 +261,7 @@ public sealed class SupplierService(
     private static SupplierDetailDto MapDetail(Supplier entity) =>
         new(entity.Id, entity.Code, entity.Name, NullIfEmpty(entity.SupplierKind),
             entity.ContactPerson, entity.Telephone, entity.Email, entity.Country,
-            YesNoParser.Format(entity.IsActive), entity.AlternateName, entity.TaxRegistration,
+            entity.IsActive, entity.MoreInformation, entity.AlternateName, entity.TaxRegistration,
             entity.Address, entity.PaymentTerms, entity.Rating, entity.ExternalIdentifier, Lifecycle);
 
     private void Track(Guid entityId, string field, string? oldValue, string? newValue)

@@ -20,19 +20,22 @@ public sealed class BarcodeRequest
     public string Symbology { get; init; } = "";
     public string? Status { get; init; }
     public string? SubjectReference { get; init; }
+    public bool? MoreInformation { get; init; }
 }
 
 public sealed record BarcodeListItemDto(
     Guid Id,
     string Value,
     string Symbology,
-    string Status);
+    string Status,
+    bool MoreInformation);
 
 public sealed record BarcodeDetailDto(
     Guid Id,
     string Value,
     string Symbology,
     string Status,
+    bool MoreInformation,
     string? SubjectReference,
     DateTime? PrintedAt,
     string? ReplacedBy,
@@ -101,5 +104,6 @@ public sealed class BarcodeRequestValidator : AbstractValidator<BarcodeRequest>
                 && !string.IsNullOrWhiteSpace(x.Status))
             .WithMessage("An unassigned barcode cannot be linked to an asset.");
         RuleFor(x => x.SubjectReference).MaximumLength(200);
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
     }
 }

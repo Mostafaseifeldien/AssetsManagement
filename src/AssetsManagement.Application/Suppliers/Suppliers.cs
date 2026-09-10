@@ -24,8 +24,8 @@ public sealed class SupplierRequest
     public string? Telephone { get; init; }
     public string? Email { get; init; }
     public string? Country { get; init; }
-    public string? Active { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? Active { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? AlternateName { get; init; }
     public string? TaxRegistration { get; init; }
     public string? Address { get; init; }
@@ -41,7 +41,9 @@ public sealed record SupplierListItemDto(
     string? SupplierKind,
     string? ContactPerson,
     string? Telephone,
-    string? Email);
+    string? Email,
+    bool Active,
+    bool MoreInformation);
 
 public sealed record SupplierDetailDto(
     Guid Id,
@@ -52,7 +54,8 @@ public sealed record SupplierDetailDto(
     string? Telephone,
     string? Email,
     string? Country,
-    string Active,
+    bool Active,
+    bool MoreInformation,
     string? AlternateName,
     string? TaxRegistration,
     string? Address,
@@ -101,10 +104,8 @@ public sealed class SupplierRequestValidator : AbstractValidator<SupplierRequest
         RuleFor(x => x.Code).NotEmpty().MaximumLength(50)
             .Matches("^[A-Za-z0-9][A-Za-z0-9._-]*$");
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Active).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Active must be Yes or No.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
+        RuleFor(x => x.Active).NotNull().WithMessage("Active is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
         RuleFor(x => x.SupplierKind).Must(x => Kinds.Contains(x!))
             .When(x => !string.IsNullOrWhiteSpace(x.SupplierKind))
             .WithMessage("Supplier kind must be Vendor, Service provider or Both.");
@@ -114,7 +115,7 @@ public sealed class SupplierRequestValidator : AbstractValidator<SupplierRequest
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
         RuleFor(x => x.Country).MaximumLength(100);
         RuleFor(x => x.AlternateName).MaximumLength(200);
-        When(x => YesNoParser.TryParse(x.MoreInformation) == true, () =>
+        When(x => x.MoreInformation == true, () =>
         {
             RuleFor(x => x.TaxRegistration).MaximumLength(100);
             RuleFor(x => x.Address).MaximumLength(500);

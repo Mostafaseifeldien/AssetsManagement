@@ -59,7 +59,7 @@ public sealed class BarcodeService(
 
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(x => new BarcodeListItemDto(x.Id, x.Value, x.Symbology, x.Status.ToString()))
+            .Select(x => new BarcodeListItemDto(x.Id, x.Value, x.Symbology, x.Status.ToString(), x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         return Page(rows, query, total);
     }
@@ -124,7 +124,8 @@ public sealed class BarcodeService(
         while (await db.Barcodes.AnyAsync(x => x.Value == value && x.Symbology == symbology, cancellationToken));
         return await CreateAsync(new BarcodeRequest
         {
-            Value = value, Symbology = symbology, Status = nameof(IdentifierStatus.Unassigned)
+            Value = value, Symbology = symbology, Status = nameof(IdentifierStatus.Unassigned),
+            MoreInformation = false
         }, cancellationToken);
     }
 
@@ -305,6 +306,7 @@ public sealed class BarcodeService(
         }
         else if (asset is not null)
             entity.AssetId = asset.Id;
+        entity.MoreInformation = request.MoreInformation == true;
         if (isNew)
             entity.PrintedAtUtc ??= DateTime.UtcNow;
     }
@@ -359,7 +361,7 @@ public sealed class BarcodeService(
     }
 
     private static BarcodeDetailDto MapDetail(Barcode entity) =>
-        new(entity.Id, entity.Value, entity.Symbology, entity.Status.ToString(),
+        new(entity.Id, entity.Value, entity.Symbology, entity.Status.ToString(), entity.MoreInformation,
             entity.Asset?.Name, entity.PrintedAtUtc, entity.ReplacedBy?.Value, Lifecycle);
 
     private static PagedResult<T> Page<T>(IReadOnlyCollection<T> rows, BarcodeListQuery query, int total)

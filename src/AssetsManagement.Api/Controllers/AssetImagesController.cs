@@ -1,4 +1,5 @@
 using AssetsManagement.Application;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,10 +9,25 @@ public sealed class ImageUploadRequest
 {
     public required IFormFile File { get; init; }
     public string? Asset { get; init; }
-    public string? IsPrimary { get; init; }
+    public bool? IsPrimary { get; init; }
     public string? Purpose { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? Caption { get; init; }
+}
+
+public sealed class ImageUploadRequestValidator : AbstractValidator<ImageUploadRequest>
+{
+    public ImageUploadRequestValidator()
+    {
+        RuleFor(x => x.File).NotNull().WithMessage("A photograph file is required.");
+        RuleFor(x => x.IsPrimary).NotNull().WithMessage("Is primary is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
+        RuleFor(x => x.Purpose).Must(AssetImageRequestValidator.IsPurpose)
+            .When(x => !string.IsNullOrWhiteSpace(x.Purpose))
+            .WithMessage("Purpose must be Identification, Condition record, Damage evidence or Nameplate.");
+        RuleFor(x => x.Caption).MaximumLength(500)
+            .When(x => x.MoreInformation == true);
+    }
 }
 
 [ApiController]

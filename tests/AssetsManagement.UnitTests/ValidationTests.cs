@@ -75,7 +75,7 @@ public sealed class ValidationTests
     {
         var result = new BarcodeRequestValidator().Validate(new BarcodeRequest
         {
-            Value = "AST-0001", Symbology = "EAN13"
+            Value = "AST-0001", Symbology = "EAN13", MoreInformation = false
         });
 
         Assert.False(result.IsValid);
@@ -90,6 +90,7 @@ public sealed class ValidationTests
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(BarcodeRequest.Value));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(BarcodeRequest.Symbology));
         Assert.Contains(result.Errors, x => x.PropertyName == nameof(BarcodeRequest.Status));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(BarcodeRequest.MoreInformation));
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public sealed class ValidationTests
     {
         var result = new BarcodeRequestValidator().Validate(new BarcodeRequest
         {
-            Value = "BC-000508", Symbology = "Code128", Status = "Assigned"
+            Value = "BC-000508", Symbology = "Code128", Status = "Assigned", MoreInformation = false
         });
 
         Assert.False(result.IsValid);
@@ -109,7 +110,7 @@ public sealed class ValidationTests
     {
         var result = new BarcodeRequestValidator().Validate(new BarcodeRequest
         {
-            Value = "BC-000508", Symbology = "DataMatrix", Status = "Unassigned"
+            Value = "BC-000508", Symbology = "DataMatrix", Status = "Unassigned", MoreInformation = false
         });
 
         Assert.True(result.IsValid);
@@ -330,7 +331,7 @@ public sealed class ValidationTests
         var result = new AssetStatusRequestValidator().Validate(new AssetStatusRequest
         {
             Code = "WRK", Name = "Working", StatusCategory = "Broken", Color = "green",
-            IsOperational = "Yes", IsTerminal = "No", Active = "Yes", MoreInformation = "No"
+            IsOperational = true, IsTerminal = false, Active = true, MoreInformation = false
         });
 
         Assert.False(result.IsValid);
@@ -344,8 +345,8 @@ public sealed class ValidationTests
         var result = new AssetStatusRequestValidator().Validate(new AssetStatusRequest
         {
             Code = "WRK", Name = "Working", StatusCategory = "Working", Color = "#16a34a",
-            IsOperational = "Yes", IsTerminal = "No", BlocksMovement = "No",
-            Active = "Yes", MoreInformation = "Yes", AlternateName = "يعمل"
+            IsOperational = true, IsTerminal = false, BlocksMovement = false,
+            Active = true, MoreInformation = true, AlternateName = "يعمل"
         });
 
         Assert.True(result.IsValid);
@@ -357,7 +358,7 @@ public sealed class ValidationTests
         var result = new AssetStatusRequestValidator().Validate(new AssetStatusRequest
         {
             Code = "UNK", Name = "Unknown", StatusCategory = "Unknown.", Color = "#6b7280",
-            IsOperational = "No", IsTerminal = "No", Active = "Yes", MoreInformation = "No"
+            IsOperational = false, IsTerminal = false, Active = true, MoreInformation = false
         });
 
         Assert.True(result.IsValid);
@@ -380,7 +381,7 @@ public sealed class ValidationTests
     {
         var result = new SupplierRequestValidator().Validate(new SupplierRequest
         {
-            Code = "SUP-001", Name = "Delta", Active = "Yes", MoreInformation = "Yes",
+            Code = "SUP-001", Name = "Delta", Active = true, MoreInformation = true,
             SupplierKind = "General", Rating = "Gold", Email = "not-an-email"
         });
 
@@ -396,7 +397,7 @@ public sealed class ValidationTests
         var result = new SupplierRequestValidator().Validate(new SupplierRequest
         {
             Code = "SUP-001", Name = "Delta Technology Distribution",
-            Active = "Yes", MoreInformation = "No",
+            Active = true, MoreInformation = false,
             SupplierKind = "Vendor", Email = "sales@deltatech.example",
             Rating = "not-a-rating", TaxRegistration = new string('x', 200)
         });
@@ -412,7 +413,7 @@ public sealed class ValidationTests
             Code = "SUP-001", Name = "Delta Technology Distribution",
             SupplierKind = "Vendor", ContactPerson = "H. Farouk",
             Telephone = "+20 2 2735 4410", Email = "sales@deltatech.example",
-            Country = "Egypt", Active = "Yes", MoreInformation = "Yes",
+            Country = "Egypt", Active = true, MoreInformation = true,
             AlternateName = "دلتا لتوزيع التقنية", TaxRegistration = "311-442-889",
             PaymentTerms = "30 days net", Rating = "Preferred", ExternalIdentifier = "ODOO-RP-1041"
         });
@@ -436,7 +437,7 @@ public sealed class ValidationTests
     {
         var result = new AssetImageRequestValidator().Validate(new AssetImageRequest
         {
-            Asset = "Demo Asset", IsPrimary = "Yes", MoreInformation = "No", Purpose = "Portrait"
+            Asset = "Demo Asset", IsPrimary = true, MoreInformation = false, Purpose = "Portrait"
         });
 
         Assert.False(result.IsValid);
@@ -448,11 +449,22 @@ public sealed class ValidationTests
     {
         var result = new AssetImageRequestValidator().Validate(new AssetImageRequest
         {
-            Asset = "Demo Asset", IsPrimary = "Yes", Purpose = "Identification",
-            MoreInformation = "Yes", Caption = "Laptop 04405 — front"
+            Asset = "Demo Asset", IsPrimary = true, Purpose = "Identification",
+            MoreInformation = true, Caption = "Laptop 04405 — front"
         });
 
         Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Asset_image_create_validator_requires_asset_is_primary_and_more_information()
+    {
+        var result = new AssetImageCreateRequestValidator().Validate(new AssetImageCreateRequest());
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetImageCreateRequest.Asset));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetImageCreateRequest.IsPrimary));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(AssetImageCreateRequest.MoreInformation));
     }
 
     [Fact]
@@ -460,8 +472,8 @@ public sealed class ValidationTests
     {
         var result = new AssetImageCreateRequestValidator().Validate(new AssetImageCreateRequest
         {
-            Asset = "Demo Asset", IsPrimary = "Yes", Purpose = "Nameplate",
-            Caption = "Serial nameplate"
+            Asset = "Demo Asset", IsPrimary = true, Purpose = "Nameplate",
+            MoreInformation = true, Caption = "Serial nameplate"
         });
 
         Assert.True(result.IsValid);

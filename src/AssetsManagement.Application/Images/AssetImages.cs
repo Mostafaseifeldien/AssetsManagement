@@ -13,23 +13,24 @@ public sealed class AssetImageListQuery
     public string? Asset { get; init; }
     public string? Purpose { get; init; }
     public bool? IsPrimary { get; init; }
+    public string? CreatedBy { get; init; }
 }
 
 public sealed class AssetImageCreateRequest
 {
     public string? Asset { get; init; }
-    public string? IsPrimary { get; init; }
+    public bool? IsPrimary { get; init; }
     public string? Purpose { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? Caption { get; init; }
 }
 
 public sealed class AssetImageRequest
 {
     public string Asset { get; init; } = "";
-    public string? IsPrimary { get; init; }
+    public bool? IsPrimary { get; init; }
     public string? Purpose { get; init; }
-    public string? MoreInformation { get; init; }
+    public bool? MoreInformation { get; init; }
     public string? Caption { get; init; }
 }
 
@@ -46,13 +47,15 @@ public sealed record AssetImageListItemDto(
     string Asset,
     string File,
     bool IsPrimary,
+    bool MoreInformation,
     string? Purpose);
 
 public sealed record AssetImageDetailDto(
     Guid Id,
     string Asset,
     string File,
-    string IsPrimary,
+    bool IsPrimary,
+    bool MoreInformation,
     string? Purpose,
     string? Caption,
     DateTime? CapturedAt,
@@ -97,16 +100,13 @@ public sealed class AssetImageCreateRequestValidator : AbstractValidator<AssetIm
     public AssetImageCreateRequestValidator()
     {
         RuleFor(x => x.Asset).NotEmpty();
-        RuleFor(x => x.IsPrimary).Must(YesNoParser.IsYesNo)
-            .When(x => !string.IsNullOrWhiteSpace(x.IsPrimary))
-            .WithMessage("Is primary must be Yes or No.");
+        RuleFor(x => x.IsPrimary).NotNull().WithMessage("Is primary is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
         RuleFor(x => x.Purpose).Must(AssetImageRequestValidator.IsPurpose)
             .When(x => !string.IsNullOrWhiteSpace(x.Purpose))
             .WithMessage("Purpose must be Identification, Condition record, Damage evidence or Nameplate.");
-        RuleFor(x => x.MoreInformation).Must(YesNoParser.IsYesNo)
-            .When(x => !string.IsNullOrWhiteSpace(x.MoreInformation))
-            .WithMessage("More information must be Yes or No.");
-        RuleFor(x => x.Caption).MaximumLength(500);
+        RuleFor(x => x.Caption).MaximumLength(500)
+            .When(x => x.MoreInformation == true);
     }
 }
 
@@ -118,14 +118,13 @@ public sealed class AssetImageRequestValidator : AbstractValidator<AssetImageReq
     public AssetImageRequestValidator()
     {
         RuleFor(x => x.Asset).NotEmpty();
-        RuleFor(x => x.IsPrimary).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("Is primary must be Yes or No.");
+        RuleFor(x => x.IsPrimary).NotNull().WithMessage("Is primary is required.");
+        RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
         RuleFor(x => x.Purpose).Must(IsPurpose)
             .When(x => !string.IsNullOrWhiteSpace(x.Purpose))
             .WithMessage("Purpose must be Identification, Condition record, Damage evidence or Nameplate.");
-        RuleFor(x => x.MoreInformation).NotEmpty().Must(YesNoParser.IsYesNo)
-            .WithMessage("More information must be Yes or No.");
-        RuleFor(x => x.Caption).MaximumLength(500);
+        RuleFor(x => x.Caption).MaximumLength(500)
+            .When(x => x.MoreInformation == true);
     }
 
     public static bool IsPurpose(string? value) =>

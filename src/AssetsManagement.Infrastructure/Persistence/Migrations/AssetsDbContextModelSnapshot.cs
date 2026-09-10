@@ -473,6 +473,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsPrimary")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
+
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -591,6 +594,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsTerminal")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MoreInformation")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
@@ -732,6 +738,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("PrintedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
 
                     b.Property<Guid?>("ReplacedById")
                         .HasColumnType("uniqueidentifier");
@@ -964,6 +973,9 @@ namespace AssetsManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("MoreInformation")
+                        .HasColumnType("bit");
 
                     b.Property<string>("PaymentTerms")
                         .HasMaxLength(100)

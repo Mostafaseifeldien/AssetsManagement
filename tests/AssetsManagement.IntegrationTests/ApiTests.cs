@@ -523,6 +523,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var bytes = new ByteArrayContent(Encoding.UTF8.GetBytes("this is not a png"));
         bytes.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         multipart.Add(bytes, "file", "fake.png");
+        multipart.Add(new StringContent("false"), "isPrimary");
+        multipart.Add(new StringContent("false"), "moreInformation");
         var response = await _client.PostAsync($"/api/asset-images?assetId={assetId}", multipart);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -536,7 +538,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var assetId = asset.GetProperty("id").GetGuid();
         var assetName = asset.GetProperty("name").GetString();
 
-        using var multipart = Photograph("front.png", "Identification", "Yes", "Laptop 04405 — front");
+        using var multipart = Photograph("front.png", "Identification", true, "Laptop 04405 — front");
         var created = await _client.PostAsync($"/api/asset-images?assetId={assetId}", multipart);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -544,7 +546,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var id = data.GetProperty("id").GetGuid();
         Assert.Equal(assetName, data.GetProperty("asset").GetString());
         Assert.Equal("front.png", data.GetProperty("file").GetString());
-        Assert.Equal("Yes", data.GetProperty("isPrimary").GetString());
+        Assert.True(data.GetProperty("isPrimary").GetBoolean());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("Identification", data.GetProperty("purpose").GetString());
         Assert.Equal("Laptop 04405 — front", data.GetProperty("caption").GetString());
         Assert.Equal("Administrator", data.GetProperty("capturedBy").GetString());
@@ -556,12 +559,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, content.StatusCode);
         Assert.Equal("image/png", content.Content.Headers.ContentType?.MediaType);
 
-        using var nameplate = Photograph("plate.png", "Nameplate", "No", "Serial nameplate");
+        using var nameplate = Photograph("plate.png", "Nameplate", false, "Serial nameplate");
         var second = await _client.PostAsync($"/api/asset-images?assetId={assetId}", nameplate);
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
         using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
         var secondId = secondJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
-        Assert.Equal("No", secondJson.RootElement.GetProperty("data").GetProperty("isPrimary").GetString());
+        Assert.False(secondJson.RootElement.GetProperty("data").GetProperty("isPrimary").GetBoolean());
+        Assert.True(secondJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var list = await _client.GetAsync($"/api/asset-images?asset={assetId}&purpose=Identification");
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
@@ -570,22 +574,30 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(assetName, item.GetProperty("asset").GetString());
         Assert.Equal("front.png", item.GetProperty("file").GetString());
         Assert.True(item.GetProperty("isPrimary").GetBoolean());
+        Assert.True(item.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("Identification", item.GetProperty("purpose").GetString());
         Assert.False(item.TryGetProperty("caption", out _));
         Assert.False(item.TryGetProperty("capturedBy", out _));
         Assert.False(item.TryGetProperty("contentUrl", out _));
+
+        var byCreator = await _client.GetAsync("/api/asset-images?createdBy=Administrator");
+        Assert.Equal(HttpStatusCode.OK, byCreator.StatusCode);
+        using var byCreatorJson = JsonDocument.Parse(await byCreator.Content.ReadAsStringAsync());
+        Assert.Contains(byCreatorJson.RootElement.GetProperty("data").GetProperty("items").EnumerateArray(),
+            x => x.GetProperty("file").GetString() == "front.png");
 
         var makePrimary = await _client.PostAsync($"/api/asset-images/{secondId}/primary", new StringContent(""));
         Assert.Equal(HttpStatusCode.OK, makePrimary.StatusCode);
 
         var ignored = await _client.PutAsJsonAsync($"/api/asset-images/{secondId}", new
         {
-            asset = assetName, isPrimary = "Yes", purpose = "Nameplate",
-            moreInformation = "No", caption = "ignored"
+            asset = assetName, isPrimary = true, purpose = "Nameplate",
+            moreInformation = false, caption = "ignored"
         });
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
         using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
         Assert.Equal("Serial nameplate", ignoredJson.RootElement.GetProperty("data").GetProperty("caption").GetString());
+        Assert.False(ignoredJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var history = await _client.GetAsync($"/api/asset-images/{id}/history");
         Assert.Equal(HttpStatusCode.OK, history.StatusCode);
@@ -607,7 +619,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await AuthorizeAsync();
         using var lookup = JsonDocument.Parse(await _client.GetStringAsync("/api/assets/lookup"));
         var assetId = lookup.RootElement.GetProperty("data")[0].GetProperty("id").GetGuid();
-        using var multipart = Photograph("damage.png", "Damage evidence", "No", "Crack on casing");
+        using var multipart = Photograph("damage.png", "Damage evidence", false, "Crack on casing");
         var created = await _client.PostAsync($"/api/asset-images?assetId={assetId}", multipart);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -616,8 +628,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var update = await _client.PutAsJsonAsync($"/api/asset-images/{id}", new
         {
-            asset = assetId.ToString(), isPrimary = "No", purpose = "Damage evidence",
-            moreInformation = "Yes", caption = "changed"
+            asset = assetId.ToString(), isPrimary = false, purpose = "Damage evidence",
+            moreInformation = true, caption = "changed"
         });
         Assert.Equal(HttpStatusCode.Conflict, update.StatusCode);
 
@@ -982,7 +994,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var value = $"BC-{Guid.NewGuid():N}"[..12];
         var created = await _client.PostAsJsonAsync("/api/barcodes", new
         {
-            value, symbology = "Code128", status = "Unassigned"
+            value, symbology = "Code128", status = "Unassigned", moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -993,6 +1005,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(value, item.GetProperty("value").GetString());
         Assert.Equal("Code128", item.GetProperty("symbology").GetString());
         Assert.Equal("Unassigned", item.GetProperty("status").GetString());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("subjectReference", out _));
         Assert.False(item.TryGetProperty("printedAt", out _));
         Assert.False(item.TryGetProperty("lifecycle", out _));
@@ -1005,7 +1018,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var value = $"BC-{Guid.NewGuid():N}"[..12];
         var created = await _client.PostAsJsonAsync("/api/barcodes", new
         {
-            value, symbology = "DataMatrix", status = "Unassigned"
+            value, symbology = "DataMatrix", status = "Unassigned", moreInformation = true
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -1018,6 +1031,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(value, data.GetProperty("value").GetString());
         Assert.Equal("DataMatrix", data.GetProperty("symbology").GetString());
         Assert.Equal("Unassigned", data.GetProperty("status").GetString());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("Unassigned → Assigned → Replaced → Retired", data.GetProperty("lifecycle").GetString());
         Assert.True(data.TryGetProperty("subjectReference", out _));
         Assert.True(data.TryGetProperty("printedAt", out _));
@@ -1033,11 +1047,11 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var replacement = $"BC-{Guid.NewGuid():N}"[..12];
         var first = await _client.PostAsJsonAsync("/api/barcodes", new
         {
-            value = stock, symbology = "QR", status = "Unassigned"
+            value = stock, symbology = "QR", status = "Unassigned", moreInformation = false
         });
         var second = await _client.PostAsJsonAsync("/api/barcodes", new
         {
-            value = replacement, symbology = "QR", status = "Unassigned"
+            value = replacement, symbology = "QR", status = "Unassigned", moreInformation = false
         });
         using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
         using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
@@ -1088,9 +1102,10 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("#16a34a", item.GetProperty("color").GetString());
         Assert.True(item.GetProperty("isOperational").GetBoolean());
         Assert.False(item.GetProperty("isTerminal").GetBoolean());
+        Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
         Assert.False(item.TryGetProperty("blocksMovement", out _));
-        Assert.False(item.TryGetProperty("active", out _));
         Assert.False(item.TryGetProperty("sortOrder", out _));
     }
 
@@ -1103,8 +1118,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var created = await _client.PostAsJsonAsync("/api/asset-statuses", new
         {
             code, name, statusCategory = "In Maintenance", color = "#f59e0b",
-            isOperational = "No", isTerminal = "No", blocksMovement = "Yes",
-            active = "Yes", moreInformation = "Yes", alternateName = "موقوف"
+            isOperational = false, isTerminal = false, blocksMovement = true,
+            active = true, moreInformation = true, alternateName = "موقوف"
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -1112,10 +1127,11 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var id = data.GetProperty("id").GetGuid();
         Assert.Equal("In Maintenance", data.GetProperty("statusCategory").GetString());
         Assert.Equal("#f59e0b", data.GetProperty("color").GetString());
-        Assert.Equal("No", data.GetProperty("isOperational").GetString());
-        Assert.Equal("No", data.GetProperty("isTerminal").GetString());
-        Assert.Equal("Yes", data.GetProperty("blocksMovement").GetString());
-        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.False(data.GetProperty("isOperational").GetBoolean());
+        Assert.False(data.GetProperty("isTerminal").GetBoolean());
+        Assert.True(data.GetProperty("blocksMovement").GetBoolean());
+        Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("موقوف", data.GetProperty("alternateName").GetString());
         Assert.True(data.GetProperty("sortOrder").GetInt32() > 0);
         Assert.Equal("Active → Inactive. Never deleted while referenced by history.",
@@ -1124,12 +1140,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var ignored = await _client.PutAsJsonAsync($"/api/asset-statuses/{id}", new
         {
             code, name, statusCategory = "In Maintenance", color = "#f59e0b",
-            isOperational = "No", isTerminal = "No", blocksMovement = "Yes",
-            active = "Yes", moreInformation = "No", alternateName = "ignored"
+            isOperational = false, isTerminal = false, blocksMovement = true,
+            active = true, moreInformation = false, alternateName = "ignored"
         });
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
         using var ignoredJson = JsonDocument.Parse(await ignored.Content.ReadAsStringAsync());
         Assert.Equal("موقوف", ignoredJson.RootElement.GetProperty("data").GetProperty("alternateName").GetString());
+        Assert.False(ignoredJson.RootElement.GetProperty("data").GetProperty("moreInformation").GetBoolean());
 
         var lookup = await _client.GetAsync("/api/asset-statuses/lookup?search=Working");
         using var lookupJson = JsonDocument.Parse(await lookup.Content.ReadAsStringAsync());
@@ -1181,7 +1198,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             code, name = "Delta Technology Distribution",
             supplierKind = "Vendor", contactPerson = "H. Farouk",
             telephone = "+20 2 2735 4410", email = "sales@deltatech.example",
-            country = "Egypt", active = "Yes", moreInformation = "No"
+            country = "Egypt", active = true, moreInformation = false
         });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
@@ -1195,12 +1212,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("H. Farouk", item.GetProperty("contactPerson").GetString());
         Assert.Equal("+20 2 2735 4410", item.GetProperty("telephone").GetString());
         Assert.Equal("sales@deltatech.example", item.GetProperty("email").GetString());
+        Assert.True(item.GetProperty("active").GetBoolean());
+        Assert.False(item.GetProperty("moreInformation").GetBoolean());
         Assert.False(item.TryGetProperty("alternateName", out _));
         Assert.False(item.TryGetProperty("taxRegistration", out _));
         Assert.False(item.TryGetProperty("address", out _));
         Assert.False(item.TryGetProperty("country", out _));
         Assert.False(item.TryGetProperty("rating", out _));
-        Assert.False(item.TryGetProperty("active", out _));
     }
 
     [Fact]
@@ -1213,7 +1231,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             code, name = "Nile Office Systems",
             supplierKind = "Both", contactPerson = "M. Adly",
             telephone = "+20 2 2419 7782", email = "info@nileoffice.example",
-            country = "Egypt", active = "Yes", moreInformation = "Yes",
+            country = "Egypt", active = true, moreInformation = true,
             alternateName = "النيل لأنظمة المكاتب", taxRegistration = $"TAX{Guid.NewGuid():N}"[..12],
             paymentTerms = "45 days net", rating = "Approved", externalIdentifier = $"ODOO-{Guid.NewGuid():N}"[..12]
         });
@@ -1223,7 +1241,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var id = data.GetProperty("id").GetGuid();
         Assert.Equal("Both", data.GetProperty("supplierKind").GetString());
         Assert.Equal("M. Adly", data.GetProperty("contactPerson").GetString());
-        Assert.Equal("Yes", data.GetProperty("active").GetString());
+        Assert.True(data.GetProperty("active").GetBoolean());
+        Assert.True(data.GetProperty("moreInformation").GetBoolean());
         Assert.Equal("النيل لأنظمة المكاتب", data.GetProperty("alternateName").GetString());
         Assert.Equal("Approved", data.GetProperty("rating").GetString());
         Assert.Equal("Draft → Active → Under review → Blocked → Archived",
@@ -1234,7 +1253,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
             code, name = "Nile Office Systems",
             supplierKind = "Both", contactPerson = "M. Adly",
             telephone = "+20 2 2419 7782", email = "info@nileoffice.example",
-            country = "United Arab Emirates", active = "Yes", moreInformation = "No",
+            country = "United Arab Emirates", active = true, moreInformation = false,
             alternateName = "ignored", rating = "Blocked"
         });
         Assert.Equal(HttpStatusCode.OK, ignored.StatusCode);
@@ -1243,6 +1262,7 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("United Arab Emirates", updated.GetProperty("country").GetString());
         Assert.Equal("النيل لأنظمة المكاتب", updated.GetProperty("alternateName").GetString());
         Assert.Equal("Approved", updated.GetProperty("rating").GetString());
+        Assert.False(updated.GetProperty("moreInformation").GetBoolean());
 
         var history = await _client.GetAsync($"/api/suppliers/{id}/history");
         Assert.Equal(HttpStatusCode.OK, history.StatusCode);
@@ -1289,12 +1309,12 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     private static object ValidAssetStatus(string code) => new
     {
         code, name = $"Name {code}", statusCategory = "Working", color = "#16a34a",
-        isOperational = "Yes", isTerminal = "No", blocksMovement = "No",
-        active = "Yes", moreInformation = "No"
+        isOperational = true, isTerminal = false, blocksMovement = false,
+        active = true, moreInformation = false
     };
 
     private static MultipartFormDataContent Photograph(
-        string fileName, string purpose, string isPrimary, string caption)
+        string fileName, string purpose, bool isPrimary, string caption, bool moreInformation = true)
     {
         var multipart = new MultipartFormDataContent();
         var bytes = new ByteArrayContent(Convert.FromBase64String(
@@ -1302,7 +1322,8 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         bytes.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         multipart.Add(bytes, "file", fileName);
         multipart.Add(new StringContent(purpose), "purpose");
-        multipart.Add(new StringContent(isPrimary), "isPrimary");
+        multipart.Add(new StringContent(isPrimary ? "true" : "false"), "isPrimary");
+        multipart.Add(new StringContent(moreInformation ? "true" : "false"), "moreInformation");
         multipart.Add(new StringContent(caption), "caption");
         return multipart;
     }

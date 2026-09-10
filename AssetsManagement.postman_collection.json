@@ -223,6 +223,15 @@
           "request": { "method": "GET", "url": "{{baseUrl}}/api/rfid-tags?status=Unassigned" }
         },
         {
+          "name": "Create Barcode",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"value\":\"BC-000508\",\"symbology\":\"Code128\",\"status\":\"Unassigned\",\"moreInformation\":false}" },
+            "url": "{{baseUrl}}/api/barcodes"
+          }
+        },
+        {
           "name": "Generate Barcode",
           "request": { "method": "POST", "url": "{{baseUrl}}/api/barcodes/generate?symbology=Code128" }
         },
@@ -256,7 +265,8 @@
                 { "key": "file", "type": "file", "src": [] },
                 { "key": "caption", "value": "Front view", "type": "text" },
                 { "key": "purpose", "value": "Identification", "type": "text" },
-                { "key": "isPrimary", "value": "true", "type": "text" }
+                { "key": "isPrimary", "value": "true", "type": "text" },
+                { "key": "moreInformation", "value": "true", "type": "text" }
               ]
             },
             "url": "{{baseUrl}}/api/asset-images?assetId={{assetId}}"
@@ -264,7 +274,7 @@
         },
         {
           "name": "List Asset Images",
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-images?relatedEntityId={{assetId}}" }
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-images?asset={{assetId}}&createdBy=" }
         }
       ]
     },
@@ -442,7 +452,7 @@
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"caption\":\"Front view\",\"purpose\":\"Identification\"}" },
+            "body": { "mode": "raw", "raw": "{\"asset\":\"{{assetId}}\",\"isPrimary\":true,\"purpose\":\"Identification\",\"moreInformation\":true,\"caption\":\"Front view\"}" },
             "url": "{{baseUrl}}/api/asset-images/{{imageId}}"
           }
         },

@@ -140,6 +140,18 @@ public static class DataSeeder
             IF COL_LENGTH(N'dbo.RfidTags', N'MoreInformation') IS NULL
                 ALTER TABLE [dbo].[RfidTags] ADD [MoreInformation] bit NOT NULL
                     CONSTRAINT [DF_RfidTags_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.Barcodes', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[Barcodes] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_Barcodes_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.AssetStatuses', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[AssetStatuses] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_AssetStatuses_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.Suppliers', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[Suppliers] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_Suppliers_MoreInformation] DEFAULT(0);
+            IF COL_LENGTH(N'dbo.AssetImages', N'MoreInformation') IS NULL
+                ALTER TABLE [dbo].[AssetImages] ADD [MoreInformation] bit NOT NULL
+                    CONSTRAINT [DF_AssetImages_MoreInformation] DEFAULT(0);
             """, cancellationToken);
     }
 

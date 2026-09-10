@@ -12,4 +12,5 @@ public sealed class Supplier : CodedMasterEntity
     public string? PaymentTerms { get; set; }
     public string? Rating { get; set; }
     public string? ExternalIdentifier { get; set; }
+    public bool MoreInformation { get; set; }
 }

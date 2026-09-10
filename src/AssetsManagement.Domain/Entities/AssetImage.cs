@@ -11,6 +11,7 @@ public sealed class AssetImage : AuditableEntity
     public string? Caption { get; set; }
     public string? Purpose { get; set; }
     public bool IsPrimary { get; set; }
+    public bool MoreInformation { get; set; }
     public DateTime? CapturedAtUtc { get; set; }
     public string? CapturedBy { get; set; }
 }

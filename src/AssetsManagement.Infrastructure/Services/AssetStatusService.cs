@@ -57,7 +57,8 @@ public sealed class AssetStatusService(
         var total = await source.CountAsync(cancellationToken);
         var rows = await source.Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new AssetStatusListItemDto(
-                x.Id, x.Code, x.Name, x.StatusCategory, x.Color, x.IsOperational, x.IsTerminal))
+                x.Id, x.Code, x.Name, x.StatusCategory, x.Color, x.IsOperational, x.IsTerminal,
+                x.IsActive, x.MoreInformation))
             .ToArrayAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)query.PageSize);
         return new(rows, query.PageNumber, query.PageSize, total, pages,
@@ -72,7 +73,7 @@ public sealed class AssetStatusService(
     {
         await EnsureUniqueCodeAsync(request.Code, null, cancellationToken);
         await EnsureUniqueNameAsync(request.Name, null, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         var entity = new AssetStatus
         {
             DisplayOrder = await NextSortOrderAsync(cancellationToken)
@@ -100,22 +101,23 @@ public sealed class AssetStatusService(
         var entity = await FindAsync(id, cancellationToken);
         await EnsureUniqueCodeAsync(request.Code, id, cancellationToken);
         await EnsureUniqueNameAsync(request.Name, id, cancellationToken);
-        var includeMore = YesNoParser.TryParse(request.MoreInformation) == true;
+        var includeMore = request.MoreInformation == true;
         var category = AssetStatusRequestValidator.NormalizeCategory(request.StatusCategory) ?? entity.StatusCategory;
-        var becameTerminal = YesNoParser.TryParse(request.IsTerminal) == true && !entity.IsTerminal;
+        var becameTerminal = request.IsTerminal == true && !entity.IsTerminal;
 
         Track(entity.Id, "Code", entity.Code, request.Code.Trim());
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
         Track(entity.Id, "Status Category", entity.StatusCategory, category);
         Track(entity.Id, "Color", entity.Color, request.Color?.Trim());
         Track(entity.Id, "Is Operational", YesNoParser.Format(entity.IsOperational),
-            YesNoParser.Format(YesNoParser.TryParse(request.IsOperational) == true));
+            YesNoParser.Format(request.IsOperational == true));
         Track(entity.Id, "Is Terminal", YesNoParser.Format(entity.IsTerminal),
-            YesNoParser.Format(YesNoParser.TryParse(request.IsTerminal) == true));
-        Track(entity.Id, "Blocks Movement", YesNoParser.Format(entity.BlocksMovement),
-            YesNoParser.Format(YesNoParser.TryParse(request.BlocksMovement) == true));
+            YesNoParser.Format(request.IsTerminal == true));
+        if (request.BlocksMovement.HasValue)
+            Track(entity.Id, "Blocks Movement", YesNoParser.Format(entity.BlocksMovement),
+                YesNoParser.Format(request.BlocksMovement == true));
         Track(entity.Id, "Active", YesNoParser.Format(entity.IsActive),
-            YesNoParser.Format(YesNoParser.TryParse(request.Active) == true));
+            YesNoParser.Format(request.Active == true));
         if (includeMore)
             Track(entity.Id, "Alternate Name", entity.AlternateName, NullIfEmpty(request.AlternateName));
 
@@ -234,10 +236,12 @@ public sealed class AssetStatusService(
         entity.Name = request.Name.Trim();
         entity.StatusCategory = AssetStatusRequestValidator.NormalizeCategory(request.StatusCategory) ?? "Unknown";
         entity.Color = request.Color!.Trim();
-        entity.IsOperational = YesNoParser.TryParse(request.IsOperational) == true;
-        entity.IsTerminal = YesNoParser.TryParse(request.IsTerminal) == true;
-        entity.BlocksMovement = YesNoParser.TryParse(request.BlocksMovement) == true;
-        entity.IsActive = YesNoParser.TryParse(request.Active) == true;
+        entity.IsOperational = request.IsOperational == true;
+        entity.IsTerminal = request.IsTerminal == true;
+        if (request.BlocksMovement.HasValue)
+            entity.BlocksMovement = request.BlocksMovement.Value;
+        entity.IsActive = request.Active == true;
+        entity.MoreInformation = includeMoreInformation;
         if (includeMoreInformation)
             entity.AlternateName = NullIfEmpty(request.AlternateName);
         if (entity.IsActive)
@@ -275,9 +279,8 @@ public sealed class AssetStatusService(
     {
         var transitions = await GetAllowedTransitionsAsync(entity.Id, cancellationToken);
         return new(entity.Id, entity.Code, entity.Name, entity.StatusCategory, entity.Color,
-            YesNoParser.Format(entity.IsOperational), YesNoParser.Format(entity.IsTerminal),
-            YesNoParser.Format(entity.BlocksMovement), YesNoParser.Format(entity.IsActive),
-            entity.AlternateName, entity.DisplayOrder, Lifecycle, transitions);
+            entity.IsOperational, entity.IsTerminal, entity.BlocksMovement, entity.IsActive,
+            entity.MoreInformation, entity.AlternateName, entity.DisplayOrder, Lifecycle, transitions);
     }
 
     private void Track(Guid entityId, string field, string? oldValue, string? newValue)
