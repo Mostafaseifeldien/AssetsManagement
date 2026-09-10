@@ -18,6 +18,12 @@ public sealed class AssetsDbContext(
     public DbSet<AssetStatus> AssetStatuses => Set<AssetStatus>();
     public DbSet<AssetStatusTransition> AssetStatusTransitions => Set<AssetStatusTransition>();
     public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<CustodyAssignment> CustodyAssignments => Set<CustodyAssignment>();
+    public DbSet<CustodyTransferBatch> CustodyTransferBatches => Set<CustodyTransferBatch>();
+    public DbSet<AssetRelationship> AssetRelationships => Set<AssetRelationship>();
+    public DbSet<AssetDocument> AssetDocuments => Set<AssetDocument>();
+    public DbSet<AssetDocumentLink> AssetDocumentLinks => Set<AssetDocumentLink>();
     public DbSet<CustomAttributeDefinition> CustomAttributeDefinitions => Set<CustomAttributeDefinition>();
     public DbSet<AssetTypeAttribute> AssetTypeAttributes => Set<AssetTypeAttribute>();
     public DbSet<RfidTag> RfidTags => Set<RfidTag>();
@@ -37,6 +43,7 @@ public sealed class AssetsDbContext(
         ConfigureMaster<Supplier>(builder, "Suppliers");
         ConfigureMaster<AssetStatus>(builder, "AssetStatuses");
         ConfigureMaster<Asset>(builder, "Assets");
+        ConfigureMaster<Employee>(builder, "Employees");
         ConfigureMaster<CustomAttributeDefinition>(builder, "CustomAttributeDefinitions");
 
         builder.Entity<AssetType>(e =>
@@ -141,12 +148,105 @@ public sealed class AssetsDbContext(
         builder.Entity<Asset>(e =>
         {
             e.Property(x => x.AssetNumber).HasMaxLength(100).IsRequired();
+            e.Property(x => x.SerialNumber).HasMaxLength(100);
+            e.Property(x => x.OwningOrganization).HasMaxLength(200);
+            e.Property(x => x.OwningDepartment).HasMaxLength(200);
+            e.Property(x => x.CostCenter).HasMaxLength(100);
+            e.Property(x => x.CustodianType).HasMaxLength(50);
+            e.Property(x => x.CurrentLocation).HasMaxLength(200);
+            e.Property(x => x.LocationSource).HasMaxLength(50);
+            e.Property(x => x.LastSeenReader).HasMaxLength(100);
+            e.Property(x => x.PurchaseValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.ResidualValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.PurchaseReference).HasMaxLength(100);
+            e.Property(x => x.DepreciationMethod).HasMaxLength(100);
+            e.Property(x => x.Criticality).HasMaxLength(20);
+            e.Property(x => x.DisposalReason).HasMaxLength(200);
+            e.Property(x => x.CustomAttributesJson).HasMaxLength(4000);
             e.HasIndex(x => x.AssetNumber).IsUnique();
+            e.HasIndex(x => x.LastSeenAtUtc);
+            e.HasIndex(x => new { x.ManufacturerId, x.SerialNumber });
             e.HasOne(x => x.AssetType).WithMany().HasForeignKey(x => x.AssetTypeId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.AssetCategory).WithMany().HasForeignKey(x => x.AssetCategoryId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.AssetModel).WithMany().HasForeignKey(x => x.AssetModelId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Manufacturer).WithMany().HasForeignKey(x => x.ManufacturerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.AssetStatus).WithMany().HasForeignKey(x => x.AssetStatusId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.CurrentCustodian).WithMany().HasForeignKey(x => x.CurrentCustodianId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ParentAsset).WithMany().HasForeignKey(x => x.ParentAssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<Employee>(e =>
+        {
+            e.Property(x => x.Email).HasMaxLength(254);
+            e.Property(x => x.Department).HasMaxLength(200);
+            e.Property(x => x.JobTitle).HasMaxLength(200);
+        });
+        builder.Entity<CustodyTransferBatch>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("CustodyTransferBatches");
+            e.Property(x => x.BatchNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.CustodianType).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            e.Property(x => x.AssignedBy).HasMaxLength(256).IsRequired();
+            e.HasIndex(x => x.BatchNumber).IsUnique();
+        });
+        builder.Entity<CustodyAssignment>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("CustodyAssignments");
+            e.Property(x => x.CustodianType).HasMaxLength(50).IsRequired();
+            e.Property(x => x.AssignedBy).HasMaxLength(256).IsRequired();
+            e.Property(x => x.AssignmentReason).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.HandoverDocument).HasMaxLength(200);
+            e.HasIndex(x => new { x.AssetId, x.Status });
+            e.HasOne(x => x.Asset).WithMany(x => x.CustodyAssignments).HasForeignKey(x => x.AssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Batch).WithMany(x => x.Assignments).HasForeignKey(x => x.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<AssetRelationship>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("AssetRelationships");
+            e.Property(x => x.RelationshipType).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Quantity).HasColumnType("decimal(18,4)");
+            e.Property(x => x.Notes).HasMaxLength(1000);
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => new { x.SourceAssetId, x.TargetAssetId, x.RelationshipType, x.ValidFromUtc }).IsUnique();
+            e.HasOne(x => x.SourceAsset).WithMany(x => x.SourceRelationships).HasForeignKey(x => x.SourceAssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.TargetAsset).WithMany(x => x.TargetRelationships).HasForeignKey(x => x.TargetAssetId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<AssetDocument>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("AssetDocuments");
+            e.Property(x => x.DocumentKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            e.Property(x => x.StoredFileName).HasMaxLength(255).IsRequired();
+            e.Property(x => x.OriginalFileName).HasMaxLength(255).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
+            e.Property(x => x.IssuedBy).HasMaxLength(200);
+            e.Property(x => x.ReferenceNumber).HasMaxLength(100);
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.UploadedBy).HasMaxLength(256).IsRequired();
+            e.HasOne(x => x.SupersededBy).WithMany().HasForeignKey(x => x.SupersededById)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.ExpiresOn);
+        });
+        builder.Entity<AssetDocumentLink>(e =>
+        {
+            e.ToTable("AssetDocumentLinks");
+            e.HasKey(x => new { x.AssetDocumentId, x.AssetId });
+            e.Property(x => x.AllocatedAmount).HasColumnType("decimal(18,2)");
+            e.HasOne(x => x.AssetDocument).WithMany(x => x.Links).HasForeignKey(x => x.AssetDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Asset).WithMany(x => x.DocumentLinks).HasForeignKey(x => x.AssetId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
         builder.Entity<CustomAttributeDefinition>(e =>
         {

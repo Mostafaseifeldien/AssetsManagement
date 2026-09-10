@@ -43,6 +43,14 @@ public static class DataSeeder
                 new AssetStatus { Code = "DSP", Name = "Disposed", StatusCategory = "Disposed", Color = "#6b7280", IsTerminal = true, BlocksMovement = true, DisplayOrder = 6 });
             await db.SaveChangesAsync(cancellationToken);
         }
+        if (!await db.Employees.AnyAsync(cancellationToken))
+        {
+            db.Employees.AddRange(
+                new Employee { Code = "EMP-1001", Name = "M. Salah", Department = "Information Technology", Email = "msalah@trangant.com", JobTitle = "Asset Manager" },
+                new Employee { Code = "EMP-1002", Name = "A. Hassan", Department = "Information Technology", Email = "ahassan@trangant.com", JobTitle = "Technician" },
+                new Employee { Code = "EMP-1003", Name = "N. Khalil", Department = "Facilities", Email = "nkhalil@trangant.com", JobTitle = "Custodian" });
+            await db.SaveChangesAsync(cancellationToken);
+        }
         if (!await db.AssetTypes.AnyAsync(cancellationToken))
         {
             var type = new AssetType { Code = "GENERAL", Name = "General Asset", NumberingFormat = "AST-#####" };
@@ -51,7 +59,8 @@ public static class DataSeeder
             db.Assets.Add(new Asset
             {
                 Code = "AST-DEMO", AssetNumber = "AST-00001", Name = "Demo Asset",
-                AssetType = type, AssetStatus = status
+                AssetType = type, AssetStatus = status, LastSeenAtUtc = DateTime.UtcNow,
+                CurrentLocation = "Server Room 205", LocationSource = "Reader", Criticality = "Low"
             });
             await db.SaveChangesAsync(cancellationToken);
         }
