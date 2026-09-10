@@ -1,6 +1,7 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using AssetsManagement.Api;
+using AssetsManagement.Api.Controllers;
 using AssetsManagement.Application;
 using AssetsManagement.Infrastructure;
 using FluentValidation;
@@ -13,6 +14,7 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddValidatorsFromAssemblyContaining<MasterDataRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ImageUploadRequestValidator>();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
