@@ -78,7 +78,7 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         var number = await NextNumberAsync(type, request.AssetNumber, cancellationToken);
         await EnsureUniqueNumberAsync(number, null, cancellationToken);
         await EnsureSerialAsync(request, null, cancellationToken);
-        var attrs = await ValidateCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
+        var attrs = await PersistCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
         var entity = new Asset();
         Apply(entity, request, type, status.Id, number, attrs);
         entity.Code = number.Length <= 50 ? number : number[..50];
@@ -109,7 +109,7 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         await EnsureSerialAsync(request, id, cancellationToken);
         if (entity.AssetStatusId != status.Id)
             AssetDataRules.EnsureAssetCanChangeStatus(entity.AssetStatus.IsTerminal, !string.IsNullOrWhiteSpace(request.DisposalReason));
-        var attrs = await ValidateCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
+        var attrs = await PersistCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
         Track(entity.Id, "Name", entity.Name, request.Name.Trim());
         Track(entity.Id, "Asset Number", entity.AssetNumber, number);
         Track(entity.Id, "Status", entity.AssetStatusId.ToString(), status.Id.ToString());
@@ -652,43 +652,24 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
             throw new DomainRuleException("That status is not permitted for this asset type.");
     }
 
-    private async Task<string?> ValidateCustomAsync(
+    private async Task<string?> PersistCustomAsync(
         Guid typeId, Dictionary<string, string?>? values, CancellationToken cancellationToken)
     {
-        var defs = await db.AssetTypeAttributes.AsNoTracking()
+        var map = values ?? [];
+        if (map.Count == 0)
+            return null;
+        var defs = await db.AssetTypeAttributes
             .Where(x => x.AssetTypeId == typeId && x.IsActive)
             .Include(x => x.CustomAttributeDefinition)
             .ToArrayAsync(cancellationToken);
-        var map = values ?? [];
-        foreach (var def in defs.Where(x => x.Requirement == AttributeRequirement.Required))
-        {
-            var value = ReadAttributeValue(map, def.CustomAttributeDefinition);
-            if (string.IsNullOrWhiteSpace(value))
-                throw new DomainRuleException(
-                    $"'{def.CustomAttributeDefinition.Name}' (code '{def.CustomAttributeDefinition.Code}') is required for this asset type.");
-        }
         foreach (var pair in map.Where(x => !string.IsNullOrWhiteSpace(x.Value)))
         {
             var match = defs.FirstOrDefault(x =>
                 AttributeKeyEquals(pair.Key, x.CustomAttributeDefinition));
             if (match is not null)
-            {
-                var tracked = await db.AssetTypeAttributes.SingleAsync(x => x.Id == match.Id, cancellationToken);
-                tracked.HasRecordedValues = true;
-            }
+                match.HasRecordedValues = true;
         }
-        return map.Count == 0 ? null : JsonSerializer.Serialize(map);
-    }
-
-    private static string? ReadAttributeValue(
-        Dictionary<string, string?> map, CustomAttributeDefinition definition)
-    {
-        foreach (var pair in map)
-        {
-            if (AttributeKeyEquals(pair.Key, definition) && !string.IsNullOrWhiteSpace(pair.Value))
-                return pair.Value;
-        }
-        return null;
+        return JsonSerializer.Serialize(map);
     }
 
     private static bool AttributeKeyEquals(string? key, CustomAttributeDefinition definition) =>
