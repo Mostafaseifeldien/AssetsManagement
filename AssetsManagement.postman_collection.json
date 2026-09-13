@@ -557,7 +557,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"warrantyId\": \"{{recordId}}\",\n  \"raisedById\": \"{{recordId}}\",\n  \"faultDescription\": \"Battery will not hold charge\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"faultDescription\": \"Battery will not hold charge\"\n}" },
             "url": "{{baseUrl}}/api/warranty-claims"
           }
         },

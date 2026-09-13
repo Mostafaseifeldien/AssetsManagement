@@ -67,9 +67,10 @@ public sealed record WarrantyDetailDto(
 
 public sealed class WarrantyClaimRequest
 {
+    public Guid? AssetId { get; init; }
+    public string? FaultDescription { get; init; }
     public Guid? WarrantyId { get; init; }
     public Guid? RaisedById { get; init; }
-    public string? FaultDescription { get; init; }
     public Guid? WorkOrderId { get; init; }
     public string? ProviderReference { get; init; }
     public decimal? AmountClaimed { get; init; }
@@ -491,8 +492,7 @@ public sealed class WarrantyClaimRequestValidator : AbstractValidator<WarrantyCl
 {
     public WarrantyClaimRequestValidator()
     {
-        RuleFor(x => x.WarrantyId).NotEmpty();
-        RuleFor(x => x.RaisedById).NotEmpty();
+        RuleFor(x => x.AssetId).NotEmpty();
         RuleFor(x => x.FaultDescription).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.ProviderReference).MaximumLength(100);
         RuleFor(x => x.AmountClaimed).GreaterThanOrEqualTo(0).When(x => x.AmountClaimed.HasValue);

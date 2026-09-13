@@ -351,20 +351,20 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
     public async Task<WarrantyClaimDetailDto> CreateClaimAsync(
         WarrantyClaimRequest request, CancellationToken cancellationToken)
     {
-        var warranty = await FindWarrantyAsync(request.WarrantyId!.Value, cancellationToken);
-        RefreshWarranty(warranty);
-        AssetDataRules.EnsureWarrantyIsClaimable(warranty.State);
-        await RequireEmployeeAsync(request.RaisedById, "Raised by", cancellationToken);
+        var asset = await RequireAssetAsync(request.AssetId, cancellationToken);
+        var warranty = await ResolveClaimableWarrantyAsync(asset.Id, request.WarrantyId, cancellationToken);
+        if (request.RaisedById.HasValue && request.RaisedById != Guid.Empty)
+            await RequireEmployeeAsync(request.RaisedById, "Raised by", cancellationToken);
         var entity = new WarrantyClaim
         {
             ClaimNumber = await NextNumberAsync("WCL", db.WarrantyClaims.CountAsync(cancellationToken)),
             WarrantyId = warranty.Id,
-            AssetId = warranty.AssetId,
+            AssetId = asset.Id,
             RaisedOn = DateTime.UtcNow.Date,
-            RaisedById = request.RaisedById,
+            RaisedById = request.RaisedById is { } raisedBy && raisedBy != Guid.Empty ? raisedBy : null,
             FaultDescription = request.FaultDescription!.Trim(),
             WorkOrderId = request.WorkOrderId,
-            ProviderReference = NullIfEmpty(request.ProviderReference),
+            ProviderReference = NullIfEmpty(request.ProviderReference) ?? NullIfEmpty(warranty.ReferenceNumber),
             AmountClaimed = request.AmountClaimed,
             State = WarrantyClaimStates.Submitted
         };
@@ -1136,6 +1136,30 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
     private async Task<Warranty> FindWarrantyAsync(Guid id, CancellationToken cancellationToken) =>
         await db.Warranties.SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
         ?? throw new NotFoundException("Warranty was not found.");
+
+    private async Task<Warranty> ResolveClaimableWarrantyAsync(
+        Guid assetId, Guid? warrantyId, CancellationToken cancellationToken)
+    {
+        Warranty? warranty;
+        if (warrantyId.HasValue && warrantyId != Guid.Empty)
+        {
+            warranty = await FindWarrantyAsync(warrantyId.Value, cancellationToken);
+            if (warranty.AssetId != assetId)
+                throw new DomainRuleException("The warranty does not belong to this asset.");
+        }
+        else
+        {
+            warranty = await db.Warranties
+                .Where(x => x.AssetId == assetId && x.State != WarrantyStates.Void)
+                .OrderByDescending(x => x.EndDate)
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? throw new DomainRuleException("No warranty is recorded for this asset.");
+        }
+
+        RefreshWarranty(warranty);
+        AssetDataRules.EnsureWarrantyIsClaimable(warranty.State);
+        return warranty;
+    }
 
     private async Task<WarrantyClaim> FindClaimAsync(Guid id, CancellationToken cancellationToken) =>
         await db.WarrantyClaims.SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
