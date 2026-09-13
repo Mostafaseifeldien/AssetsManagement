@@ -6,7 +6,7 @@ namespace AssetsManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/assets")]
-public sealed class AssetsController(IAssetService service) : ControllerBase
+public sealed class AssetsController(IAssetService service, IAssetOperationsService operations) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<AssetListItemDto>>), StatusCodes.Status200OK)]
@@ -27,6 +27,54 @@ public sealed class AssetsController(IAssetService service) : ControllerBase
         [FromQuery] string? search, CancellationToken cancellationToken) =>
         Ok(ApiResponse<IReadOnlyCollection<AssetLookupDto>>.Ok(
             await service.LookupAsync(search, cancellationToken)));
+
+    [HttpGet("specification")]
+    public async Task<ActionResult<ApiResponse<AssetSpecificationDto>>> Specification() =>
+        Ok(ApiResponse<AssetSpecificationDto>.Ok(
+            await operations.GetSpecificationAsync(),
+            "Specification retrieved successfully."));
+
+    [HttpGet("{id:guid}/screen")]
+    public async Task<ActionResult<ApiResponse<AssetScreenDto>>> Screen(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetScreenDto>.Ok(
+            await operations.GetScreenAsync(id, cancellationToken), "Asset screen retrieved successfully."));
+
+    [HttpGet("{id:guid}/financials")]
+    public async Task<ActionResult<ApiResponse<AssetFinancialsDto>>> Financials(
+        Guid id, CancellationToken cancellationToken) =>
+            Ok(ApiResponse<AssetFinancialsDto>.Ok(
+            await operations.GetFinancialsAsync(id, cancellationToken), "Cost and warranty retrieved successfully."));
+
+    [HttpGet("{id:guid}/depreciation")]
+    public async Task<ActionResult<ApiResponse<DepreciationScheduleDetailDto>>> Depreciation(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<DepreciationScheduleDetailDto>.Ok(
+            await operations.GetAssetScheduleAsync(id, cancellationToken), "Depreciation schedule retrieved successfully."));
+
+    [HttpGet("{id:guid}/maintenance")]
+    public async Task<ActionResult<ApiResponse<AssetMaintenanceDto>>> Maintenance(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetMaintenanceDto>.Ok(
+            await operations.GetMaintenanceAsync(id, cancellationToken), "Maintenance retrieved successfully."));
+
+    [HttpGet("{id:guid}/identity")]
+    public async Task<ActionResult<ApiResponse<AssetIdentityDto>>> Identity(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetIdentityDto>.Ok(
+            await operations.GetIdentityAsync(id, cancellationToken), "Identity and tags retrieved successfully."));
+
+    [HttpGet("{id:guid}/movements")]
+    public async Task<ActionResult<ApiResponse<AssetMovementDto>>> Movements(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetMovementDto>.Ok(
+            await operations.GetMovementsAsync(id, cancellationToken), "Movement history retrieved successfully."));
+
+    [HttpGet("{id:guid}/map-position")]
+    public async Task<ActionResult<ApiResponse<AssetPositionDto?>>> MapPosition(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<AssetPositionDto?>.Ok(
+            await operations.GetMapPositionAsync(id, cancellationToken), "Map position retrieved successfully."));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<AssetDetailDto>>> Get(

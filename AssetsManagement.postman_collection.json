@@ -492,6 +492,140 @@
       ]
     },
     {
+      "name": "Asset Screen",
+      "item": [
+        {
+          "name": "Asset Specification",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/specification" }
+        },
+        {
+          "name": "Get Asset",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}" }
+        },
+        {
+          "name": "Asset Screen Aggregate",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/screen" }
+        },
+        {
+          "name": "Cost and Warranty",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/financials" }
+        },
+        {
+          "name": "Depreciation Schedule",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/depreciation" }
+        },
+        {
+          "name": "Maintenance Tab",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/maintenance" }
+        },
+        {
+          "name": "Identity and Tags",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/identity" }
+        },
+        {
+          "name": "Movement History",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/movements" }
+        },
+        {
+          "name": "Show on Map",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/assets/{{assetId}}/map-position" }
+        },
+        {
+          "name": "List Expenses",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-expenses?assetId={{assetId}}" }
+        },
+        {
+          "name": "Create Expense",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"expenseKind\": \"Purchase\",\n  \"amount\": 18500,\n  \"currency\": \"EGP\",\n  \"expenseDate\": \"2025-01-15\",\n  \"capitalized\": true,\n  \"costCenter\": \"CC-1100\"\n}" },
+            "url": "{{baseUrl}}/api/asset-expenses"
+          }
+        },
+        {
+          "name": "Create Warranty",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"warrantyKind\": \"Manufacturer\",\n  \"providerId\": \"{{recordId}}\",\n  \"referenceNumber\": \"WTY-001\",\n  \"startDate\": \"2025-01-15\",\n  \"endDate\": \"2028-01-14\",\n  \"coverage\": \"Parts and labour\",\n  \"responseTime\": \"Next business day\"\n}" },
+            "url": "{{baseUrl}}/api/warranties"
+          }
+        },
+        {
+          "name": "Raise Warranty Claim",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"warrantyId\": \"{{recordId}}\",\n  \"raisedById\": \"{{recordId}}\",\n  \"faultDescription\": \"Battery will not hold charge\"\n}" },
+            "url": "{{baseUrl}}/api/warranty-claims"
+          }
+        },
+        {
+          "name": "Create Depreciation Schedule",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"method\": \"Straight line\",\n  \"acquisitionValue\": 18500,\n  \"residualValue\": 1500,\n  \"usefulLifeMonths\": 36,\n  \"startDate\": \"2025-02-01\",\n  \"periodLength\": \"Monthly\"\n}" },
+            "url": "{{baseUrl}}/api/depreciation-schedules"
+          }
+        },
+        {
+          "name": "Report a Fault",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"raisedById\": \"{{recordId}}\",\n  \"faultDescription\": \"Will not power on\",\n  \"urgency\": \"High\",\n  \"assetUsable\": false\n}" },
+            "url": "{{baseUrl}}/api/maintenance-requests"
+          }
+        },
+        {
+          "name": "Create Work Order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"workKind\": \"Corrective\",\n  \"source\": \"Manual\",\n  \"priority\": \"High\",\n  \"assetOutOfService\": true\n}" },
+            "url": "{{baseUrl}}/api/work-orders"
+          }
+        },
+        {
+          "name": "Record Inspection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"inspectionKind\": \"Condition\",\n  \"inspectedOn\": \"2026-09-10\",\n  \"inspectorId\": \"{{recordId}}\",\n  \"condition\": \"Good\",\n  \"locationConfirmed\": true,\n  \"custodianConfirmed\": true,\n  \"actionRequired\": \"None\"\n}" },
+            "url": "{{baseUrl}}/api/asset-inspections"
+          }
+        },
+        {
+          "name": "Record Position",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"floorPlan\": \"HQ Floor 2\",\n  \"room\": \"Server Room 205\",\n  \"x\": 12.5,\n  \"y\": 8.25,\n  \"positionSource\": \"Manual\"\n}" },
+            "url": "{{baseUrl}}/api/asset-positions"
+          }
+        },
+        {
+          "name": "Request Exit",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"requestedById\": \"{{recordId}}\",\n  \"reason\": \"Repair\",\n  \"destination\": \"Dell Service Centre\",\n  \"expectedReturn\": \"2026-09-20\"\n}" },
+            "url": "{{baseUrl}}/api/exit-authorizations"
+          }
+        },
+        {
+          "name": "List Custody Assignments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/custody-assignments?assetId={{assetId}}" }
+        },
+        {
+          "name": "List Asset Documents",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/asset-documents?assetId={{assetId}}" }
+        }
+      ]
+    },
+    {
       "name": "Health",
       "auth": { "type": "noauth" },
       "request": { "method": "GET", "url": "{{baseUrl}}/health" }

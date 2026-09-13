@@ -48,4 +48,56 @@ public static class AssetDataRules
         if (status is CustodyStatuses.Closed or CustodyStatuses.Disputed)
             throw new DomainRuleException("The custody chain is evidentiary and cannot be edited after it is closed.");
     }
+
+    public static void EnsureExpenseCanBeEdited(string state)
+    {
+        if (state == ExpenseStates.Reversed)
+            throw new DomainRuleException("A reversed expense cannot be edited.");
+    }
+
+    public static void EnsureExpenseCanBeReversed(string state)
+    {
+        if (state != ExpenseStates.Recorded)
+            throw new DomainRuleException("Only a recorded expense can be reversed.");
+    }
+
+    public static void EnsureScheduleIsActive(string state)
+    {
+        if (state is DepreciationStates.Completed or DepreciationStates.Superseded)
+            throw new DomainRuleException("A completed or superseded depreciation schedule cannot be changed.");
+    }
+
+    public static void EnsureWarrantyIsClaimable(string state)
+    {
+        if (state is WarrantyStates.Expired or WarrantyStates.Void)
+            throw new DomainRuleException("A claim cannot be raised against an expired or void warranty.");
+    }
+
+    public static void EnsureRequestCanBeRejected(string state)
+    {
+        if (state is MaintenanceRequestStates.Converted or MaintenanceRequestStates.Rejected
+            or MaintenanceRequestStates.Withdrawn)
+            throw new DomainRuleException("This maintenance request can no longer be rejected.");
+    }
+
+    public static void EnsureRequestCanBeConverted(string state)
+    {
+        if (state is MaintenanceRequestStates.Converted or MaintenanceRequestStates.Rejected
+            or MaintenanceRequestStates.Withdrawn)
+            throw new DomainRuleException("This maintenance request can no longer be converted.");
+    }
+
+    public static void EnsureWorkOrderIsOpen(string state)
+    {
+        if (state is WorkOrderStates.Completed or WorkOrderStates.Verified or WorkOrderStates.Canceled)
+            throw new DomainRuleException("A closed work order cannot accept further changes.");
+    }
+
+    public static void EnsureExitCanBeDecided(string status)
+    {
+        if (status is ExitAuthorizationStates.Approved or ExitAuthorizationStates.Active
+            or ExitAuthorizationStates.Used or ExitAuthorizationStates.Expired
+            or ExitAuthorizationStates.Rejected or ExitAuthorizationStates.Revoked)
+            throw new DomainRuleException("This exit authorization is no longer awaiting approval.");
+    }
 }

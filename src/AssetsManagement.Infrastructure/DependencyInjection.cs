@@ -32,6 +32,7 @@ public static class InfrastructureRegistration
         services.AddScoped<ICustodyService, CustodyService>();
         services.AddScoped<IAssetRelationshipService, AssetRelationshipService>();
         services.AddScoped<IAssetDocumentService, AssetDocumentService>();
+        services.AddScoped<IAssetOperationsService, AssetOperationsService>();
         services.AddDbContext<AssetsDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddIdentityCore<ApplicationUser>(options =>

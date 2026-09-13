@@ -53,14 +53,44 @@ public sealed class AssetRequest
     public DateTime? WarrantyExpiry { get; init; }
     public string? DepreciationMethod { get; init; }
     public int? UsefulLifeMonths { get; init; }
+    public int? UsefulLife { get; init; }
     public decimal? ResidualValue { get; init; }
     public string? Criticality { get; init; }
     public Guid? ParentAssetId { get; init; }
+    public Guid? RfidTagId { get; init; }
+    public Guid? BarcodeId { get; init; }
+    public Guid? PrimaryImageId { get; init; }
     public DateTime? CommissionedDate { get; init; }
     public DateTime? DisposalDate { get; init; }
     public string? DisposalReason { get; init; }
     public Dictionary<string, string?>? CustomAttributes { get; init; }
     public bool? Active { get; init; }
+    public AssetWarrantyRequest? Warranty { get; init; }
+    public AssetDepreciationRequest? Depreciation { get; init; }
+}
+
+public sealed class AssetWarrantyRequest
+{
+    public string? WarrantyKind { get; init; }
+    public Guid? ProviderId { get; init; }
+    public string? ReferenceNumber { get; init; }
+    public DateTime? StartDate { get; init; }
+    public DateTime? EndDate { get; init; }
+    public string? Coverage { get; init; }
+    public string? Exclusions { get; init; }
+    public string? ResponseTime { get; init; }
+    public decimal? Cost { get; init; }
+}
+
+public sealed class AssetDepreciationRequest
+{
+    public string? Method { get; init; }
+    public decimal? AcquisitionValue { get; init; }
+    public decimal? ResidualValue { get; init; }
+    public int? UsefulLifeMonths { get; init; }
+    public DateTime? StartDate { get; init; }
+    public decimal? Rate { get; init; }
+    public string? PeriodLength { get; init; }
 }
 
 public sealed class AssetStatusChangeRequest
@@ -204,7 +234,8 @@ public sealed class AssetRequestValidator : AbstractValidator<AssetRequest>
     public AssetRequestValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.AssetTypeId).NotEmpty().WithMessage("Asset type id is required.");
+        RuleFor(x => x.AssetTypeId).NotEmpty().WithMessage("Asset type is required.");
+        RuleFor(x => x.AssetStatusId).NotEmpty().WithMessage("Status is required.");
         RuleFor(x => x.AlternateName).MaximumLength(200);
         RuleFor(x => x.AssetNumber).MaximumLength(100);
         RuleFor(x => x.SerialNumber).MaximumLength(100);
@@ -217,8 +248,10 @@ public sealed class AssetRequestValidator : AbstractValidator<AssetRequest>
         RuleFor(x => x.LocationSource).Must(x => x is null || LocationSources.All.Contains(x))
             .WithMessage("Location source must be Manual, Inventory, Reader or Operation.");
         RuleFor(x => x.PurchaseReference).MaximumLength(100);
-        RuleFor(x => x.DepreciationMethod).MaximumLength(100);
+        RuleFor(x => x.DepreciationMethod).Must(x => x is null || DepreciationMethods.All.Contains(x))
+            .WithMessage("Depreciation method must be Straight line, Reducing balance, Units of production or Not depreciated.");
         RuleFor(x => x.UsefulLifeMonths).InclusiveBetween(1, 1200).When(x => x.UsefulLifeMonths.HasValue);
+        RuleFor(x => x.UsefulLife).InclusiveBetween(1, 1200).When(x => x.UsefulLife.HasValue);
         RuleFor(x => x.PurchaseValue).GreaterThanOrEqualTo(0).When(x => x.PurchaseValue.HasValue);
         RuleFor(x => x.ResidualValue).GreaterThanOrEqualTo(0).When(x => x.ResidualValue.HasValue);
         RuleFor(x => x.Criticality).Must(x => x is null || AssetListQueryValidator.Criticalities.Contains(x))
@@ -226,6 +259,42 @@ public sealed class AssetRequestValidator : AbstractValidator<AssetRequest>
         RuleFor(x => x.DisposalReason).MaximumLength(200);
         RuleFor(x => x.ParentAssetId).NotEqual(x => x.AssetTypeId)
             .When(x => x.ParentAssetId.HasValue);
+        RuleFor(x => x.Warranty).SetValidator(new AssetWarrantyRequestValidator()!)
+            .When(x => x.Warranty is not null);
+        RuleFor(x => x.Depreciation).SetValidator(new AssetDepreciationRequestValidator()!)
+            .When(x => x.Depreciation is not null);
+    }
+}
+
+public sealed class AssetWarrantyRequestValidator : AbstractValidator<AssetWarrantyRequest>
+{
+    public AssetWarrantyRequestValidator()
+    {
+        RuleFor(x => x.WarrantyKind).Must(x => x is null || WarrantyKinds.All.Contains(x))
+            .WithMessage("Warranty kind must be Manufacturer, Extended, Service contract or Insurance.");
+        RuleFor(x => x.EndDate).GreaterThan(x => x.StartDate)
+            .When(x => x.StartDate.HasValue && x.EndDate.HasValue)
+            .WithMessage("Warranty end date must be after start date.");
+        RuleFor(x => x.ReferenceNumber).MaximumLength(100);
+        RuleFor(x => x.Coverage).MaximumLength(2000);
+        RuleFor(x => x.Exclusions).MaximumLength(2000);
+        RuleFor(x => x.ResponseTime).MaximumLength(200);
+        RuleFor(x => x.Cost).GreaterThanOrEqualTo(0).When(x => x.Cost.HasValue);
+    }
+}
+
+public sealed class AssetDepreciationRequestValidator : AbstractValidator<AssetDepreciationRequest>
+{
+    public AssetDepreciationRequestValidator()
+    {
+        RuleFor(x => x.Method).Must(x => x is null || DepreciationMethods.All.Contains(x))
+            .WithMessage("Depreciation method must be Straight line, Reducing balance, Units of production or Not depreciated.");
+        RuleFor(x => x.AcquisitionValue).GreaterThanOrEqualTo(0).When(x => x.AcquisitionValue.HasValue);
+        RuleFor(x => x.ResidualValue).GreaterThanOrEqualTo(0).When(x => x.ResidualValue.HasValue);
+        RuleFor(x => x.UsefulLifeMonths).InclusiveBetween(1, 1200).When(x => x.UsefulLifeMonths.HasValue);
+        RuleFor(x => x.PeriodLength).Must(x => x is null || PeriodLengths.All.Contains(x))
+            .WithMessage("Period length must be Monthly, Quarterly or Annual.");
+        RuleFor(x => x.Rate).InclusiveBetween(0, 100).When(x => x.Rate.HasValue);
     }
 }
 

@@ -29,6 +29,18 @@ public sealed class AssetsDbContext(
     public DbSet<RfidTag> RfidTags => Set<RfidTag>();
     public DbSet<Barcode> Barcodes => Set<Barcode>();
     public DbSet<AssetImage> AssetImages => Set<AssetImage>();
+    public DbSet<AssetExpense> AssetExpenses => Set<AssetExpense>();
+    public DbSet<Warranty> Warranties => Set<Warranty>();
+    public DbSet<WarrantyClaim> WarrantyClaims => Set<WarrantyClaim>();
+    public DbSet<DepreciationSchedule> DepreciationSchedules => Set<DepreciationSchedule>();
+    public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
+    public DbSet<MaintenancePlan> MaintenancePlans => Set<MaintenancePlan>();
+    public DbSet<MaintenanceRequest> MaintenanceRequests => Set<MaintenanceRequest>();
+    public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
+    public DbSet<WorkOrderLine> WorkOrderLines => Set<WorkOrderLine>();
+    public DbSet<AssetInspection> AssetInspections => Set<AssetInspection>();
+    public DbSet<AssetPosition> AssetPositions => Set<AssetPosition>();
+    public DbSet<ExitAuthorization> ExitAuthorizations => Set<ExitAuthorization>();
     public DbSet<ChangeHistoryEntry> ChangeHistory => Set<ChangeHistoryEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -301,6 +313,175 @@ public sealed class AssetsDbContext(
             e.HasIndex(x => new { x.AssetId, x.IsPrimary });
             e.HasOne(x => x.Asset).WithMany(x => x.Images).HasForeignKey(x => x.AssetId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<AssetExpense>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("AssetExpenses");
+            e.Property(x => x.ExpenseKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Currency).HasMaxLength(10).IsRequired();
+            e.Property(x => x.InvoiceNumber).HasMaxLength(100);
+            e.Property(x => x.CostCenter).HasMaxLength(100);
+            e.Property(x => x.Notes).HasMaxLength(1000);
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => new { x.AssetId, x.ExpenseDate });
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.WorkOrder).WithMany().HasForeignKey(x => x.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<Warranty>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("Warranties");
+            e.Property(x => x.WarrantyKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Provider).HasMaxLength(200).IsRequired();
+            e.Property(x => x.ReferenceNumber).HasMaxLength(100);
+            e.Property(x => x.Coverage).HasMaxLength(2000);
+            e.Property(x => x.Exclusions).HasMaxLength(2000);
+            e.Property(x => x.ResponseTime).HasMaxLength(200);
+            e.Property(x => x.Cost).HasColumnType("decimal(18,2)");
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            var warrantyIndex = e.HasIndex(x => new { x.AssetId, x.WarrantyKind, x.StartDate }).IsUnique();
+            if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+                warrantyIndex.HasFilter("[State] <> N'Void'");
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<WarrantyClaim>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("WarrantyClaims");
+            e.Property(x => x.ClaimNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.FaultDescription).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.ProviderReference).HasMaxLength(100);
+            e.Property(x => x.AmountClaimed).HasColumnType("decimal(18,2)");
+            e.Property(x => x.AmountRecovered).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Resolution).HasMaxLength(2000);
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => x.ClaimNumber).IsUnique();
+            e.HasOne(x => x.Warranty).WithMany().HasForeignKey(x => x.WarrantyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<DepreciationSchedule>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("DepreciationSchedules");
+            e.Property(x => x.Method).HasMaxLength(50).IsRequired();
+            e.Property(x => x.AcquisitionValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.ResidualValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Rate).HasColumnType("decimal(9,4)");
+            e.Property(x => x.PeriodLength).HasMaxLength(20).IsRequired();
+            e.Property(x => x.AccumulatedDepreciation).HasColumnType("decimal(18,2)");
+            e.Property(x => x.NetBookValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => new { x.AssetId, x.State });
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<DepreciationEntry>(e =>
+        {
+            e.ToTable("DepreciationEntries");
+            e.Property(x => x.Period).HasMaxLength(20).IsRequired();
+            e.Property(x => x.OpeningValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Charge).HasColumnType("decimal(18,2)");
+            e.Property(x => x.ClosingValue).HasColumnType("decimal(18,2)");
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => new { x.ScheduleId, x.Period }).IsUnique();
+            e.HasOne(x => x.Schedule).WithMany(x => x.Entries).HasForeignKey(x => x.ScheduleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<MaintenancePlan>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("MaintenancePlans");
+            e.Property(x => x.Code).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.ScopeKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.TriggerKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.TaskList).HasMaxLength(4000);
+            e.HasIndex(x => x.Code).IsUnique();
+        });
+        builder.Entity<MaintenanceRequest>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("MaintenanceRequests");
+            e.Property(x => x.RequestNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.FaultDescription).HasMaxLength(2000).IsRequired();
+            e.Property(x => x.Urgency).HasMaxLength(30).IsRequired();
+            e.Property(x => x.LocationAtReport).HasMaxLength(200);
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.Property(x => x.RejectionReason).HasMaxLength(1000);
+            e.HasIndex(x => x.RequestNumber).IsUnique();
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.WorkOrder).WithMany().HasForeignKey(x => x.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<WorkOrder>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("WorkOrders");
+            e.Property(x => x.WorkOrderNumber).HasMaxLength(50).IsRequired();
+            e.Property(x => x.WorkKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Source).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Priority).HasMaxLength(20).IsRequired();
+            e.Property(x => x.WorkDone).HasMaxLength(4000);
+            e.Property(x => x.DowntimeHours).HasColumnType("decimal(18,1)");
+            e.Property(x => x.TotalCost).HasColumnType("decimal(18,2)");
+            e.Property(x => x.State).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => x.WorkOrderNumber).IsUnique();
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<WorkOrderLine>(e =>
+        {
+            e.ToTable("WorkOrderLines");
+            e.Property(x => x.LineKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Hours).HasColumnType("decimal(18,2)");
+            e.Property(x => x.Quantity).HasColumnType("decimal(18,4)");
+            e.Property(x => x.UnitCost).HasColumnType("decimal(18,2)");
+            e.Property(x => x.LineCost).HasColumnType("decimal(18,2)");
+            e.HasIndex(x => new { x.WorkOrderId, x.LineNumber }).IsUnique();
+            e.HasOne(x => x.WorkOrder).WithMany(x => x.Lines).HasForeignKey(x => x.WorkOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<AssetInspection>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("AssetInspections");
+            e.Property(x => x.InspectionKind).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Condition).HasMaxLength(30).IsRequired();
+            e.Property(x => x.Findings).HasMaxLength(2000);
+            e.Property(x => x.ActionRequired).HasMaxLength(50).IsRequired();
+            e.HasIndex(x => new { x.AssetId, x.InspectedOn });
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<AssetPosition>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("AssetPositions");
+            e.Property(x => x.FloorPlan).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Room).HasMaxLength(200);
+            e.Property(x => x.X).HasColumnType("decimal(18,4)");
+            e.Property(x => x.Y).HasColumnType("decimal(18,4)");
+            e.Property(x => x.PositionSource).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Confidence).HasColumnType("decimal(5,4)");
+            e.Property(x => x.RecordedBy).HasMaxLength(256);
+            e.Property(x => x.DerivedFromReader).HasMaxLength(100);
+            e.HasIndex(x => new { x.AssetId, x.IsCurrent });
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<ExitAuthorization>(e =>
+        {
+            ConfigureAuditable(e);
+            e.ToTable("ExitAuthorizations");
+            e.Property(x => x.Number).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(30).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(50);
+            e.Property(x => x.Destination).HasMaxLength(200);
+            e.Property(x => x.GateScope).HasMaxLength(200);
+            e.Property(x => x.OwnerDecision).HasMaxLength(20);
+            e.Property(x => x.ManagerDecision).HasMaxLength(20);
+            e.Property(x => x.SecurityDecision).HasMaxLength(20);
+            e.HasIndex(x => x.Number).IsUnique();
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

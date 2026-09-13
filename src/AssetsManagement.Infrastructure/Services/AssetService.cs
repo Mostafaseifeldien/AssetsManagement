@@ -71,12 +71,13 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
     public async Task<AssetDetailDto> CreateAsync(AssetRequest request, CancellationToken cancellationToken)
     {
         var type = await RequireTypeAsync(request.AssetTypeId, cancellationToken);
-        var status = await ResolveStatusAsync(request.AssetStatusId, type, cancellationToken);
+        var status = await RequireStatusAsync(request.AssetStatusId, cancellationToken);
         await EnsureModelAsync(request.AssetModelId, type.Id, cancellationToken);
         await EnsureParentAsync(request.ParentAssetId, null, cancellationToken);
+        await EnsureCustodianAsync(request.CurrentCustodianId, cancellationToken);
         var number = await NextNumberAsync(type, request.AssetNumber, cancellationToken);
         await EnsureUniqueNumberAsync(number, null, cancellationToken);
-        await EnsureSerialAsync(type, request, null, cancellationToken);
+        await EnsureSerialAsync(request, null, cancellationToken);
         var attrs = await ValidateCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
         var entity = new Asset();
         Apply(entity, request, type, status.Id, number, attrs);
@@ -87,6 +88,7 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         AddHistory(entity.Id, $"Asset Number set to '{entity.AssetNumber}'");
         AddHistory(entity.Id, $"Asset Type set to '{type.Name}'");
         AddHistory(entity.Id, $"Status set to '{status.Name}'");
+        await ApplyScreenExtrasAsync(entity, request, cancellationToken);
         await SaveAsync(cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
     }
@@ -95,15 +97,16 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
     {
         var entity = await FindAsync(id, cancellationToken);
         var type = await RequireTypeAsync(request.AssetTypeId, cancellationToken);
-        var status = await ResolveStatusAsync(request.AssetStatusId, type, cancellationToken);
+        var status = await RequireStatusAsync(request.AssetStatusId, cancellationToken);
         await EnsureModelAsync(request.AssetModelId, type.Id, cancellationToken);
         await EnsureParentAsync(request.ParentAssetId, id, cancellationToken);
+        await EnsureCustodianAsync(request.CurrentCustodianId, cancellationToken);
         if (!string.Equals(entity.AssetNumber, request.AssetNumber?.Trim(), StringComparison.Ordinal)
             && !string.IsNullOrWhiteSpace(type.NumberingFormat) && type.NumberingFormat.Contains('#'))
             throw new DomainRuleException("The numbering scheme is automatic; the asset number cannot be overwritten.");
         var number = string.IsNullOrWhiteSpace(request.AssetNumber) ? entity.AssetNumber : request.AssetNumber.Trim();
         await EnsureUniqueNumberAsync(number, id, cancellationToken);
-        await EnsureSerialAsync(type, request, id, cancellationToken);
+        await EnsureSerialAsync(request, id, cancellationToken);
         if (entity.AssetStatusId != status.Id)
             AssetDataRules.EnsureAssetCanChangeStatus(entity.AssetStatus.IsTerminal, !string.IsNullOrWhiteSpace(request.DisposalReason));
         var attrs = await ValidateCustomAsync(type.Id, request.CustomAttributes, cancellationToken);
@@ -113,6 +116,7 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         Track(entity.Id, "Current Location", entity.CurrentLocation, NullIfEmpty(request.CurrentLocation));
         Apply(entity, request, type, status.Id, number, attrs);
         entity.Code = number.Length <= 50 ? number : number[..50];
+        await ApplyScreenExtrasAsync(entity, request, cancellationToken);
         await SaveAsync(cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
     }
@@ -272,10 +276,10 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         entity.PurchaseDate = request.PurchaseDate;
         entity.PurchaseValue = request.PurchaseValue;
         entity.PurchaseReference = NullIfEmpty(request.PurchaseReference);
-        entity.WarrantyExpiry = request.WarrantyExpiry;
-        entity.DepreciationMethod = NullIfEmpty(request.DepreciationMethod);
-        entity.UsefulLifeMonths = request.UsefulLifeMonths;
-        entity.ResidualValue = request.ResidualValue;
+        entity.WarrantyExpiry = request.Warranty?.EndDate ?? request.WarrantyExpiry;
+        entity.DepreciationMethod = NullIfEmpty(request.Depreciation?.Method) ?? NullIfEmpty(request.DepreciationMethod);
+        entity.UsefulLifeMonths = request.Depreciation?.UsefulLifeMonths ?? request.UsefulLifeMonths ?? request.UsefulLife;
+        entity.ResidualValue = request.Depreciation?.ResidualValue ?? request.ResidualValue;
         entity.Criticality = NullIfEmpty(request.Criticality);
         entity.ParentAssetId = request.ParentAssetId;
         entity.CommissionedDate = request.CommissionedDate;
@@ -320,12 +324,11 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
             ?? throw new NotFoundException("Asset type was not found.");
     }
 
-    private async Task<AssetStatus> ResolveStatusAsync(Guid? id, AssetType type, CancellationToken cancellationToken)
+    private async Task<AssetStatus> RequireStatusAsync(Guid? id, CancellationToken cancellationToken)
     {
-        var statusId = !id.HasValue || id == Guid.Empty ? type.DefaultStatusId : id;
-        if (!statusId.HasValue || statusId == Guid.Empty)
-            throw new DomainRuleException("Status id is required.");
-        return await db.AssetStatuses.SingleOrDefaultAsync(x => x.Id == statusId && x.IsActive, cancellationToken)
+        if (!id.HasValue || id == Guid.Empty)
+            throw new DomainRuleException("Status is required.");
+        return await db.AssetStatuses.SingleOrDefaultAsync(x => x.Id == id && x.IsActive, cancellationToken)
             ?? throw new NotFoundException("Asset status was not found.");
     }
 
@@ -337,6 +340,234 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
             ?? throw new NotFoundException("Asset model was not found.");
         if (model.AssetTypeId.HasValue && model.AssetTypeId != typeId)
             throw new DomainRuleException("The asset model does not belong to the selected asset type.");
+    }
+
+    private async Task ApplyScreenExtrasAsync(Asset asset, AssetRequest request, CancellationToken cancellationToken)
+    {
+        await AssignRfidAsync(asset, request.RfidTagId, cancellationToken);
+        await AssignBarcodeAsync(asset, request.BarcodeId, cancellationToken);
+        await AssignPrimaryImageAsync(asset, request.PrimaryImageId, cancellationToken);
+        await ApplyWarrantyAsync(asset, request, cancellationToken);
+        await ApplyDepreciationAsync(asset, request, cancellationToken);
+    }
+
+    private async Task AssignRfidAsync(Asset asset, Guid? tagId, CancellationToken cancellationToken)
+    {
+        if (!tagId.HasValue || tagId == Guid.Empty) return;
+        var tag = await db.RfidTags.SingleOrDefaultAsync(x => x.Id == tagId, cancellationToken)
+            ?? throw new NotFoundException("RFID tag was not found.");
+        if (tag.AssetId == asset.Id && tag.Status == IdentifierStatus.Assigned) return;
+        AssetDataRules.EnsureIdentifierCanBeAssigned(tag.Status, tag.AssetId);
+        var taken = await db.RfidTags.AnyAsync(x =>
+            x.AssetId == asset.Id && x.Status == IdentifierStatus.Assigned && x.Id != tag.Id, cancellationToken);
+        if (taken)
+            throw new DomainRuleException("This asset already has an assigned RFID tag.");
+        tag.AssetId = asset.Id;
+        tag.Status = IdentifierStatus.Assigned;
+        tag.EncodedAtUtc = DateTime.UtcNow;
+        tag.EncodedBy = currentUser.DisplayName;
+        AddHistory(asset.Id, $"RFID tag set to '{tag.TagIdentifier}'");
+    }
+
+    private async Task AssignBarcodeAsync(Asset asset, Guid? barcodeId, CancellationToken cancellationToken)
+    {
+        if (!barcodeId.HasValue || barcodeId == Guid.Empty) return;
+        var barcode = await db.Barcodes.SingleOrDefaultAsync(x => x.Id == barcodeId, cancellationToken)
+            ?? throw new NotFoundException("Barcode was not found.");
+        if (barcode.AssetId == asset.Id && barcode.Status == IdentifierStatus.Assigned) return;
+        AssetDataRules.EnsureIdentifierCanBeAssigned(barcode.Status, barcode.AssetId);
+        var taken = await db.Barcodes.AnyAsync(x =>
+            x.AssetId == asset.Id && x.Status == IdentifierStatus.Assigned && x.Id != barcode.Id, cancellationToken);
+        if (taken)
+            throw new DomainRuleException("This asset already has an assigned barcode.");
+        barcode.AssetId = asset.Id;
+        barcode.Status = IdentifierStatus.Assigned;
+        barcode.SubjectType = "Asset";
+        AddHistory(asset.Id, $"Barcode set to '{barcode.Value}'");
+    }
+
+    private async Task AssignPrimaryImageAsync(Asset asset, Guid? imageId, CancellationToken cancellationToken)
+    {
+        if (!imageId.HasValue || imageId == Guid.Empty) return;
+        var image = await db.AssetImages.SingleOrDefaultAsync(x => x.Id == imageId && x.IsActive, cancellationToken)
+            ?? throw new NotFoundException("Primary image was not found.");
+        var others = await db.AssetImages
+            .Where(x => x.AssetId == asset.Id && x.IsPrimary && x.IsActive && x.Id != image.Id)
+            .ToArrayAsync(cancellationToken);
+        foreach (var item in others)
+            item.IsPrimary = false;
+        image.AssetId = asset.Id;
+        image.IsPrimary = true;
+        AddHistory(asset.Id, "Primary image assigned");
+    }
+
+    private async Task ApplyWarrantyAsync(Asset asset, AssetRequest request, CancellationToken cancellationToken)
+    {
+        var input = request.Warranty;
+        var end = input?.EndDate ?? request.WarrantyExpiry;
+        if (end is null && input is null) return;
+        if (end is null)
+            throw new DomainRuleException("Warranty end date or warrantyExpiry is required to record a warranty.");
+        var providerId = input?.ProviderId ?? request.SupplierId;
+        string providerName = "Not specified";
+        if (providerId.HasValue && providerId != Guid.Empty)
+        {
+            var provider = await db.Suppliers.SingleOrDefaultAsync(x => x.Id == providerId && x.IsActive, cancellationToken)
+                ?? throw new NotFoundException("Warranty provider (supplier) was not found.");
+            providerId = provider.Id;
+            providerName = provider.Name;
+        }
+        else
+            providerId = null;
+        var start = input?.StartDate ?? request.PurchaseDate ?? request.CommissionedDate ?? DateTime.UtcNow.Date;
+        if (end <= start)
+            throw new DomainRuleException("Warranty expiry must be after the warranty start / purchase date.");
+        var kind = NullIfEmpty(input?.WarrantyKind) ?? "Manufacturer";
+        if (!WarrantyKinds.All.Contains(kind))
+            throw new DomainRuleException("Warranty kind must be Manufacturer, Extended, Service contract or Insurance.");
+        var existing = await db.Warranties
+            .Where(x => x.AssetId == asset.Id && x.State != WarrantyStates.Void)
+            .OrderByDescending(x => x.EndDate)
+            .FirstOrDefaultAsync(cancellationToken);
+        var entity = existing ?? new Warranty { AssetId = asset.Id };
+        entity.WarrantyKind = kind;
+        entity.ProviderId = providerId;
+        entity.Provider = providerName;
+        entity.ReferenceNumber = NullIfEmpty(input?.ReferenceNumber);
+        entity.StartDate = start;
+        entity.EndDate = end.Value;
+        entity.Coverage = NullIfEmpty(input?.Coverage);
+        entity.Exclusions = NullIfEmpty(input?.Exclusions);
+        entity.ResponseTime = NullIfEmpty(input?.ResponseTime);
+        entity.Cost = input?.Cost;
+        entity.State = entity.EndDate.Date < DateTime.UtcNow.Date
+            ? WarrantyStates.Expired
+            : entity.EndDate.Date <= DateTime.UtcNow.Date.AddDays(90)
+                ? WarrantyStates.Expiring
+                : WarrantyStates.Active;
+        asset.WarrantyExpiry = entity.EndDate;
+        if (existing is null)
+        {
+            db.Warranties.Add(entity);
+            AddHistory(asset.Id, $"Warranty recorded until '{entity.EndDate:yyyy-MM-dd}'");
+        }
+    }
+
+    private async Task ApplyDepreciationAsync(Asset asset, AssetRequest request, CancellationToken cancellationToken)
+    {
+        var input = request.Depreciation;
+        var method = NullIfEmpty(input?.Method) ?? NullIfEmpty(request.DepreciationMethod);
+        var life = input?.UsefulLifeMonths ?? request.UsefulLifeMonths ?? request.UsefulLife;
+        var acquisition = input?.AcquisitionValue ?? request.PurchaseValue;
+        if (input is null && method is null && life is null)
+            return;
+        method ??= "Straight line";
+        if (!DepreciationMethods.All.Contains(method))
+            throw new DomainRuleException(
+                "Depreciation method must be Straight line, Reducing balance, Units of production or Not depreciated.");
+        if (life is null or < 1)
+            throw new DomainRuleException("Useful life is required to record a depreciation schedule.");
+        if (acquisition is null)
+            throw new DomainRuleException("Purchase value or depreciation.acquisitionValue is required to record depreciation.");
+        var residual = input?.ResidualValue ?? request.ResidualValue ?? 0;
+        var start = input?.StartDate ?? request.CommissionedDate ?? request.PurchaseDate ?? DateTime.UtcNow.Date;
+        var current = await db.DepreciationSchedules
+            .Where(x => x.AssetId == asset.Id &&
+                (x.State == DepreciationStates.Draft || x.State == DepreciationStates.Running ||
+                 x.State == DepreciationStates.Suspended))
+            .OrderByDescending(x => x.StartDate)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is not null)
+        {
+            current.State = DepreciationStates.Superseded;
+            AddHistory(asset.Id, "Previous depreciation schedule superseded");
+        }
+        var schedule = BuildSchedule(asset.Id, method, acquisition.Value, residual, life.Value, start,
+            input?.Rate, input?.PeriodLength);
+        if (current is not null)
+            current.SupersededById = schedule.Id;
+        db.DepreciationSchedules.Add(schedule);
+        asset.DepreciationMethod = schedule.Method;
+        asset.UsefulLifeMonths = schedule.UsefulLifeMonths;
+        asset.ResidualValue = schedule.ResidualValue;
+        AddHistory(asset.Id, $"Depreciation schedule created ({schedule.Method}, {schedule.UsefulLifeMonths} months)");
+    }
+
+    private static DepreciationSchedule BuildSchedule(
+        Guid assetId, string method, decimal acquisition, decimal residual, int lifeMonths,
+        DateTime startDate, decimal? rate, string? periodLength)
+    {
+        var schedule = new DepreciationSchedule
+        {
+            AssetId = assetId,
+            Method = method,
+            AcquisitionValue = acquisition,
+            ResidualValue = residual,
+            UsefulLifeMonths = lifeMonths,
+            StartDate = startDate,
+            Rate = rate,
+            PeriodLength = string.IsNullOrWhiteSpace(periodLength) ? "Monthly" : periodLength,
+            State = DepreciationStates.Running
+        };
+        var months = schedule.PeriodLength switch
+        {
+            "Quarterly" => 3,
+            "Annual" => 12,
+            _ => 1
+        };
+        var periods = Math.Max(1, (int)Math.Ceiling(schedule.UsefulLifeMonths / (double)months));
+        var remaining = schedule.AcquisitionValue - schedule.ResidualValue;
+        var opening = schedule.AcquisitionValue;
+        var posted = 0m;
+        var today = DateTime.UtcNow.Date;
+        for (var i = 0; i < periods; i++)
+        {
+            var start = schedule.StartDate.AddMonths(i * months);
+            var end = start.AddMonths(months).AddDays(-1);
+            decimal charge;
+            if (schedule.Method == "Not depreciated")
+                charge = 0;
+            else if (schedule.Method == "Reducing balance")
+            {
+                var annual = (schedule.Rate ?? 20) / 100m;
+                var periodRate = annual * months / 12m;
+                charge = Math.Round(Math.Min(opening * periodRate, Math.Max(0, opening - schedule.ResidualValue)), 2);
+            }
+            else
+            {
+                var straight = Math.Round(remaining / (periods - i), 2);
+                charge = Math.Min(straight, Math.Max(0, opening - schedule.ResidualValue));
+                remaining -= charge;
+            }
+            var closing = Math.Max(schedule.ResidualValue, opening - charge);
+            charge = opening - closing;
+            var state = end < today ? "Posted" : "Projected";
+            if (state == "Posted") posted += charge;
+            schedule.Entries.Add(new DepreciationEntry
+            {
+                Period = start.ToString("yyyy-MM"),
+                PeriodStart = start,
+                PeriodEnd = end,
+                OpeningValue = opening,
+                Charge = charge,
+                ClosingValue = closing,
+                State = state
+            });
+            opening = closing;
+        }
+        schedule.AccumulatedDepreciation = posted;
+        schedule.NetBookValue = schedule.AcquisitionValue - posted;
+        if (schedule.Entries.All(x => x.State == "Posted"))
+            schedule.State = DepreciationStates.Completed;
+        return schedule;
+    }
+
+    private async Task EnsureCustodianAsync(Guid? custodianId, CancellationToken cancellationToken)
+    {
+        if (!custodianId.HasValue || custodianId == Guid.Empty) return;
+        _ = await db.Employees.AnyAsync(x => x.Id == custodianId && x.IsActive, cancellationToken)
+            ? true
+            : throw new NotFoundException("Current custodian was not found. Use GET /api/employees/lookup.");
     }
 
     private async Task EnsureParentAsync(Guid? parentId, Guid? selfId, CancellationToken cancellationToken)
@@ -358,11 +589,9 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
     }
 
     private async Task EnsureSerialAsync(
-        AssetType type, AssetRequest request, Guid? excludingId, CancellationToken cancellationToken)
+        AssetRequest request, Guid? excludingId, CancellationToken cancellationToken)
     {
         var serial = NullIfEmpty(request.SerialNumber);
-        if (type.RequiresSerialNumber && serial is null)
-            throw new DomainRuleException("Serial number is required for this asset type.");
         if (serial is null || !request.ManufacturerId.HasValue) return;
         var exists = await db.Assets.AnyAsync(x =>
             x.ManufacturerId == request.ManufacturerId && x.SerialNumber == serial &&
@@ -386,9 +615,9 @@ public sealed class AssetService(AssetsDbContext db, ICurrentUser currentUser) :
         if (!automatic)
         {
             var manual = requested?.Trim();
-            if (string.IsNullOrWhiteSpace(manual))
-                throw new DomainRuleException("Asset number is required when the type has no automatic numbering scheme.");
-            return manual;
+            return string.IsNullOrWhiteSpace(manual)
+                ? await NextNumberAsync(new AssetType { NumberingFormat = "AST-#####" }, null, cancellationToken)
+                : manual;
         }
         if (!string.IsNullOrWhiteSpace(requested))
             throw new DomainRuleException("The numbering scheme is automatic; the asset number cannot be overwritten.");
