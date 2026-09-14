@@ -164,7 +164,24 @@ public sealed class RfidTagService(
             ?? throw new NotFoundException("Asset was not found.");
         if (!target.IsActive)
             throw new NotFoundException("Asset was not found.");
-        await EnsureAssetHasNoAssignedTagAsync(target.Id, id, cancellationToken);
+
+        var holders = await db.RfidTags
+            .Where(x => x.AssetId == target.Id && x.Id != id)
+            .ToArrayAsync(cancellationToken);
+        foreach (var holder in holders)
+        {
+            var wasAssigned = holder.Status == IdentifierStatus.Assigned;
+            holder.Asset = null;
+            holder.AssetId = null;
+            holder.ReplacedById = entity.Id;
+            if (wasAssigned)
+                holder.Status = IdentifierStatus.Replaced;
+            AddHistory(holder.Id, "Asset cleared");
+            AddHistory(holder.Id, $"Replaced By set to '{entity.TagIdentifier}'");
+            if (wasAssigned)
+                AddHistory(holder.Id, "Status changed from 'Assigned' to 'Replaced'");
+        }
+
         var previous = entity.Asset?.Name;
         entity.Asset = target;
         entity.AssetId = target.Id;
