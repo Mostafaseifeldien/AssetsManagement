@@ -51,6 +51,7 @@ public sealed class WorkOrder : AuditableEntity
     public string? WorkDone { get; set; }
     public decimal TotalCost { get; set; }
     public string State { get; set; } = WorkOrderStates.Scheduled;
+    public Guid? VerifiedById { get; set; }
     public ICollection<WorkOrderLine> Lines { get; set; } = [];
 }
 

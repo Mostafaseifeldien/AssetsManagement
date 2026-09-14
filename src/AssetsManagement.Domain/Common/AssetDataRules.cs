@@ -93,6 +93,14 @@ public static class AssetDataRules
             throw new DomainRuleException("A closed work order cannot accept further changes.");
     }
 
+    public static void EnsureWorkOrderCanBeVerified(string state)
+    {
+        if (state == WorkOrderStates.Verified)
+            throw new DomainRuleException("This work order is already verified.");
+        if (state != WorkOrderStates.Completed)
+            throw new DomainRuleException("Only a completed work order can be verified.");
+    }
+
     public static void EnsureExitCanBeDecided(string status)
     {
         if (status is ExitAuthorizationStates.Approved or ExitAuthorizationStates.Active

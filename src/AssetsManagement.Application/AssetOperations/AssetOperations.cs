@@ -213,7 +213,8 @@ public sealed record WorkOrderDetailDto(
     Guid? SourceRequestId, string Priority, DateTime? ScheduledStart, DateTime? DueDate,
     Guid? AssignedToId, Guid? ProviderId, bool UnderWarranty, bool AssetOutOfService,
     DateTime? StartedAt, DateTime? CompletedAt, decimal DowntimeHours, string? WorkDone,
-    decimal TotalCost, string State, IReadOnlyCollection<WorkOrderLineDto> Lines, string Lifecycle);
+    decimal TotalCost, string State, Guid? VerifiedById, string? VerifiedBy,
+    IReadOnlyCollection<WorkOrderLineDto> Lines, string Lifecycle);
 
 public sealed class AssetInspectionRequest
 {
@@ -426,6 +427,7 @@ public interface IAssetOperationsService
     Task<WorkOrderDetailDto> UpdateWorkOrderAsync(Guid id, WorkOrderRequest request, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> StartWorkOrderAsync(Guid id, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> CompleteWorkOrderAsync(Guid id, WorkOrderCompleteRequest request, CancellationToken cancellationToken);
+    Task<WorkOrderDetailDto> VerifyWorkOrderAsync(Guid id, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> AddWorkOrderLineAsync(Guid id, WorkOrderLineRequest request, CancellationToken cancellationToken);
 
     Task<PagedResult<AssetInspectionListItemDto>> ListInspectionsAsync(AssetChildListQuery query, CancellationToken cancellationToken);

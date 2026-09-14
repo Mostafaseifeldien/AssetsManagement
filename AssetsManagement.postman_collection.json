@@ -589,6 +589,13 @@
           }
         },
         {
+          "name": "Verify Work Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/work-orders/{{recordId}}/verify"
+          }
+        },
+        {
           "name": "Record Inspection",
           "request": {
             "method": "POST",

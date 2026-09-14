@@ -622,14 +622,14 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
     }
 
     public async Task<WorkOrderDetailDto> GetWorkOrderAsync(Guid id, CancellationToken cancellationToken) =>
-        MapWorkOrder(await FindWorkOrderAsync(id, cancellationToken));
+        await MapWorkOrderAsync(await FindWorkOrderAsync(id, cancellationToken), cancellationToken);
 
     public async Task<WorkOrderDetailDto> CreateWorkOrderAsync(
         WorkOrderRequest request, CancellationToken cancellationToken)
     {
         var entity = await CreateWorkOrderCoreAsync(request, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        return MapWorkOrder(entity);
+        return await MapWorkOrderAsync(entity, cancellationToken);
     }
 
     public async Task<WorkOrderDetailDto> UpdateWorkOrderAsync(
@@ -647,7 +647,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
         if (request.AssetOutOfService.HasValue) entity.AssetOutOfService = request.AssetOutOfService.Value;
         entity.WorkDone = NullIfEmpty(request.WorkDone) ?? entity.WorkDone;
         await db.SaveChangesAsync(cancellationToken);
-        return MapWorkOrder(entity);
+        return await MapWorkOrderAsync(entity, cancellationToken);
     }
 
     public async Task<WorkOrderDetailDto> StartWorkOrderAsync(Guid id, CancellationToken cancellationToken)
@@ -660,7 +660,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
             await SetAssetStatusAsync(entity.AssetId, "MNT", "In Maintenance", cancellationToken);
         AddHistory(nameof(WorkOrder), entity.Id, "State changed to 'In progress'");
         await db.SaveChangesAsync(cancellationToken);
-        return MapWorkOrder(entity);
+        return await MapWorkOrderAsync(entity, cancellationToken);
     }
 
     public async Task<WorkOrderDetailDto> CompleteWorkOrderAsync(
@@ -680,7 +680,22 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
             await SetAssetStatusAsync(entity.AssetId, "WRK", "Working", cancellationToken);
         AddHistory(nameof(WorkOrder), entity.Id, "State changed to 'Completed'");
         await db.SaveChangesAsync(cancellationToken);
-        return MapWorkOrder(entity);
+        return await MapWorkOrderAsync(entity, cancellationToken);
+    }
+
+    public async Task<WorkOrderDetailDto> VerifyWorkOrderAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await FindWorkOrderAsync(id, cancellationToken);
+        AssetDataRules.EnsureWorkOrderCanBeVerified(entity.State);
+        var verifiedById = currentUser.UserId
+            ?? throw new DomainRuleException("A signed-in user is required to verify a work order.");
+        if (entity.AssignedToId.HasValue && entity.AssignedToId == verifiedById)
+            throw new DomainRuleException("Somebody other than the person who did the work must verify it.");
+        entity.State = WorkOrderStates.Verified;
+        entity.VerifiedById = verifiedById;
+        AddHistory(nameof(WorkOrder), entity.Id, "State changed to 'Verified'");
+        await db.SaveChangesAsync(cancellationToken);
+        return await MapWorkOrderAsync(entity, cancellationToken);
     }
 
     public async Task<WorkOrderDetailDto> AddWorkOrderLineAsync(
@@ -709,7 +724,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
         RecalcCost(entity);
         AddHistory(nameof(WorkOrder), entity.Id, $"Line {line.LineNumber} added");
         await db.SaveChangesAsync(cancellationToken);
-        return MapWorkOrder(entity);
+        return await MapWorkOrderAsync(entity, cancellationToken);
     }
 
     public async Task<PagedResult<AssetInspectionListItemDto>> ListInspectionsAsync(
@@ -1324,14 +1339,33 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
 
     private static string UsableText(bool usable) => usable ? "yes" : "no";
 
-    private static WorkOrderDetailDto MapWorkOrder(WorkOrder x) =>
+    private async Task<WorkOrderDetailDto> MapWorkOrderAsync(WorkOrder x, CancellationToken cancellationToken) =>
+        MapWorkOrder(x, await ResolvePersonNameAsync(x.VerifiedById, cancellationToken));
+
+    private static WorkOrderDetailDto MapWorkOrder(WorkOrder x, string? verifiedBy = null) =>
         new(x.Id, x.WorkOrderNumber, x.AssetId, x.WorkKind, x.Source, x.SourceRequestId, x.Priority,
             x.ScheduledStart, x.DueDate, x.AssignedToId, x.ProviderId, x.UnderWarranty, x.AssetOutOfService,
             x.StartedAtUtc, x.CompletedAtUtc, x.DowntimeHours, x.WorkDone, x.TotalCost, x.State,
+            x.VerifiedById, verifiedBy,
             x.Lines.OrderBy(l => l.LineNumber).Select(l => new WorkOrderLineDto(
                 l.Id, l.LineNumber, l.LineKind, l.Description, l.TechnicianId, l.Hours, l.Quantity,
                 l.UnitCost, l.LineCost, l.Chargeable)).ToArray(),
             "Draft → Scheduled → In progress → Completed → Verified | Canceled");
+
+    private async Task<string?> ResolvePersonNameAsync(Guid? personId, CancellationToken cancellationToken)
+    {
+        if (!personId.HasValue) return null;
+        var key = personId.Value.ToString("D").ToLowerInvariant();
+        var user = await db.Users.AsNoTracking()
+            .Where(x => x.Id.ToLower() == key)
+            .Select(x => x.DisplayName ?? x.UserName)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(user)) return user;
+        return await db.Employees.AsNoTracking()
+            .Where(x => x.Id == personId)
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
     private static AssetInspectionDetailDto MapInspection(AssetInspection x) =>
         new(x.Id, x.AssetId, x.InspectionKind, x.InspectedOn, x.InspectorId, x.Condition,

@@ -52,6 +52,13 @@ public sealed class WorkOrdersController(IAssetOperationsService service) : Cont
         Ok(ApiResponse<WorkOrderDetailDto>.Ok(
             await service.CompleteWorkOrderAsync(id, request, cancellationToken), "Work order completed."));
 
+    [HttpPost("{id:guid}/verify")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<WorkOrderDetailDto>>> Verify(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(ApiResponse<WorkOrderDetailDto>.Ok(
+            await service.VerifyWorkOrderAsync(id, cancellationToken), "Work order verified."));
+
     [HttpPost("{id:guid}/lines")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<WorkOrderDetailDto>>> AddLine(
