@@ -226,7 +226,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"tagIdentifier\":\"EPC:3034-DEMO-001\",\"tagType\":\"Passive UHF\",\"encodingStandard\":\"GS1 SGTIN\",\"status\":\"Unassigned\",\"moreInformation\":false}" },
+            "body": { "mode": "raw", "raw": "{\"tagIdentifier\":\"EPC:3034-DEMO-001\",\"tagType\":\"Passive UHF\",\"encodingStandard\":\"GS1 SGTIN\",\"status\":\"Assigned\",\"assetId\":\"{{assetId}}\",\"moreInformation\":false}" },
             "url": "{{baseUrl}}/api/rfid-tags"
           }
         },
@@ -413,7 +413,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"replacementId\":\"{{replacementId}}\"}" },
+            "body": { "mode": "raw", "raw": "{\"assetId\":\"{{assetId}}\"}" },
             "url": "{{baseUrl}}/api/rfid-tags/{{identifierId}}/replace"
           }
         },

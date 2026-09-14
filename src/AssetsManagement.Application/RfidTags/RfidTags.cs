@@ -21,8 +21,13 @@ public sealed class RfidTagRequest
     public string TagType { get; init; } = "";
     public string? EncodingStandard { get; init; }
     public string? Status { get; init; }
-    public string? Asset { get; init; }
+    public Guid? AssetId { get; init; }
     public bool? MoreInformation { get; init; }
+}
+
+public sealed class RfidTagReplaceRequest
+{
+    public Guid? AssetId { get; init; }
 }
 
 public sealed record RfidTagListItemDto(
@@ -40,6 +45,7 @@ public sealed record RfidTagDetailDto(
     string? EncodingStandard,
     string Status,
     bool MoreInformation,
+    Guid? AssetId,
     string? Asset,
     DateTime? EncodedAt,
     string? EncodedBy,
@@ -67,7 +73,7 @@ public interface IRfidTagService
     Task<RfidTagDetailDto> UpdateAsync(Guid id, RfidTagRequest request, CancellationToken cancellationToken);
     Task<RfidTagDetailDto> AssignAsync(Guid id, Guid assetId, CancellationToken cancellationToken);
     Task<RfidTagDetailDto> UnassignAsync(Guid id, CancellationToken cancellationToken);
-    Task<RfidTagDetailDto> ReplaceAsync(Guid id, Guid replacementId, CancellationToken cancellationToken);
+    Task<RfidTagDetailDto> ReplaceAsync(Guid id, Guid assetId, CancellationToken cancellationToken);
     Task DeactivateAsync(Guid id, CancellationToken cancellationToken);
     Task<RfidTagDetailDto> RestoreAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<LookupDto>> LookupAsync(string? search, string? status, CancellationToken cancellationToken);
@@ -107,13 +113,19 @@ public sealed class RfidTagRequestValidator : AbstractValidator<RfidTagRequest>
         RuleFor(x => x.Status).NotEmpty().Must(x => Statuses.Contains(x!))
             .WithMessage("Status must be Unassigned, Assigned, Damaged, Replaced or Retired.");
         RuleFor(x => x.MoreInformation).NotNull().WithMessage("More information is required.");
-        RuleFor(x => x.Asset).NotEmpty()
+        RuleFor(x => x.AssetId).NotEmpty()
             .When(x => string.Equals(x.Status, "Assigned", StringComparison.OrdinalIgnoreCase))
-            .WithMessage("Asset is required when the tag is assigned.");
-        RuleFor(x => x.Asset).Empty()
+            .WithMessage("Asset id is required when the tag is assigned.");
+        RuleFor(x => x.AssetId)
+            .Must(id => !id.HasValue || id == Guid.Empty)
             .When(x => string.Equals(x.Status, "Unassigned", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(x.Status))
             .WithMessage("An unassigned tag cannot be linked to an asset.");
-        RuleFor(x => x.Asset).MaximumLength(200);
     }
+}
+
+public sealed class RfidTagReplaceRequestValidator : AbstractValidator<RfidTagReplaceRequest>
+{
+    public RfidTagReplaceRequestValidator() =>
+        RuleFor(x => x.AssetId).NotEmpty().WithMessage("Asset id is required.");
 }

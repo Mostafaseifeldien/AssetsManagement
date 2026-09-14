@@ -1036,19 +1036,12 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         await AuthorizeAsync();
         var stock = $"E280:STK:{Guid.NewGuid():N}"[..20];
-        var replacement = $"E280:REP:{Guid.NewGuid():N}"[..20];
         var first = await _client.PostAsJsonAsync("/api/rfid-tags", new
         {
             tagIdentifier = stock, tagType = "Passive HF", status = "Unassigned", moreInformation = false
         });
-        var second = await _client.PostAsJsonAsync("/api/rfid-tags", new
-        {
-            tagIdentifier = replacement, tagType = "Passive HF", status = "Unassigned", moreInformation = false
-        });
         using var firstJson = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
-        using var secondJson = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
         var firstId = firstJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
-        var secondId = secondJson.RootElement.GetProperty("data").GetProperty("id").GetGuid();
 
         var waiting = await _client.GetAsync("/api/rfid-tags/assets-waiting?search=Demo");
         Assert.Equal(HttpStatusCode.OK, waiting.StatusCode);
@@ -1064,16 +1057,13 @@ public sealed class ApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Assigned", assigned.RootElement.GetProperty("data").GetProperty("status").GetString());
         Assert.Equal("Demo Asset", assigned.RootElement.GetProperty("data").GetProperty("asset").GetString());
 
-        var replace = await _client.PostAsJsonAsync($"/api/rfid-tags/{firstId}/replace", new { replacementId = secondId });
+        var replace = await _client.PostAsJsonAsync($"/api/rfid-tags/{firstId}/replace", new { assetId });
         Assert.Equal(HttpStatusCode.OK, replace.StatusCode);
         using var replaced = JsonDocument.Parse(await replace.Content.ReadAsStringAsync());
         Assert.Equal("Assigned", replaced.RootElement.GetProperty("data").GetProperty("status").GetString());
-        Assert.Equal(replacement, replaced.RootElement.GetProperty("data").GetProperty("tagIdentifier").GetString());
-
-        var old = await _client.GetAsync($"/api/rfid-tags/{firstId}");
-        using var oldJson = JsonDocument.Parse(await old.Content.ReadAsStringAsync());
-        Assert.Equal("Replaced", oldJson.RootElement.GetProperty("data").GetProperty("status").GetString());
-        Assert.Equal(replacement, oldJson.RootElement.GetProperty("data").GetProperty("replacedBy").GetString());
+        Assert.Equal(stock, replaced.RootElement.GetProperty("data").GetProperty("tagIdentifier").GetString());
+        Assert.Equal(assetId, replaced.RootElement.GetProperty("data").GetProperty("assetId").GetGuid());
+        Assert.Equal("Demo Asset", replaced.RootElement.GetProperty("data").GetProperty("asset").GetString());
 
         var history = await _client.GetAsync($"/api/rfid-tags/{firstId}/history");
         Assert.Equal(HttpStatusCode.OK, history.StatusCode);

@@ -80,10 +80,10 @@ public sealed class RfidTagsController(IRfidTagService service) : ControllerBase
     [HttpPost("{id:guid}/replace")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<RfidTagDetailDto>>> Replace(
-        Guid id, ReplacementRequest request, CancellationToken cancellationToken) =>
+        Guid id, RfidTagReplaceRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<RfidTagDetailDto>.Ok(
-            await service.ReplaceAsync(id, request.ReplacementId, cancellationToken),
-            "RFID tag replaced and the previous tag kept for historical reads."));
+            await service.ReplaceAsync(id, request.AssetId!.Value, cancellationToken),
+            "RFID tag asset replaced successfully."));
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]

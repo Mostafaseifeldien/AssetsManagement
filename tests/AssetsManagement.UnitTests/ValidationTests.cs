@@ -67,7 +67,7 @@ public sealed class ValidationTests
         });
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.Asset));
+        Assert.Contains(result.Errors, x => x.PropertyName == nameof(RfidTagRequest.AssetId));
     }
 
     [Fact]

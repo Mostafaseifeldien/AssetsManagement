@@ -78,7 +78,7 @@ public sealed class RfidTagService(
     {
         await EnsureUniqueIdentifierAsync(request.TagIdentifier, null, cancellationToken);
         var status = ParseStatus(request.Status);
-        var asset = await ResolveAssetAsync(request.Asset, cancellationToken);
+        var asset = await ResolveAssetAsync(request.AssetId, cancellationToken);
         if (status == IdentifierStatus.Assigned)
             await EnsureAssetHasNoAssignedTagAsync(asset!.Id, null, cancellationToken);
 
@@ -103,7 +103,7 @@ public sealed class RfidTagService(
         var entity = await FindTrackedAsync(id, cancellationToken, asNoTracking: false);
         await EnsureUniqueIdentifierAsync(request.TagIdentifier, id, cancellationToken);
         var status = ParseStatus(request.Status);
-        var asset = await ResolveAssetAsync(request.Asset, cancellationToken);
+        var asset = await ResolveAssetAsync(request.AssetId, cancellationToken);
         EnsureAssetNotMoved(entity, asset);
 
         if (status == IdentifierStatus.Assigned)
@@ -157,33 +157,25 @@ public sealed class RfidTagService(
     }
 
     public async Task<RfidTagDetailDto> ReplaceAsync(
-        Guid id, Guid replacementId, CancellationToken cancellationToken)
+        Guid id, Guid assetId, CancellationToken cancellationToken)
     {
-        var old = await FindTrackedAsync(id, cancellationToken, asNoTracking: false);
-        if (old.Status != IdentifierStatus.Assigned || old.AssetId is null)
-            throw new ConflictException("Only an assigned tag can be replaced.");
-        if (id == replacementId)
-            throw new ConflictException("A tag cannot replace itself.");
-        var replacement = await db.RfidTags.Include(x => x.Asset)
-            .SingleOrDefaultAsync(x => x.Id == replacementId, cancellationToken)
-            ?? throw new NotFoundException("Replacement RFID tag was not found.");
-        AssetDataRules.EnsureIdentifierCanBeAssigned(replacement.Status, replacement.AssetId);
-
-        var assetId = old.AssetId.Value;
-        var assetName = old.Asset?.Name ?? assetId.ToString();
-        old.Status = IdentifierStatus.Replaced;
-        old.ReplacedById = replacementId;
-        old.AssetId = null;
-        replacement.AssetId = assetId;
-        replacement.Status = IdentifierStatus.Assigned;
-        replacement.EncodedAtUtc = DateTime.UtcNow;
-        replacement.EncodedBy = currentUser.DisplayName;
-        AddHistory(old.Id, $"Status changed from 'Assigned' to 'Replaced'");
-        AddHistory(old.Id, $"Replaced By set to '{replacement.TagIdentifier}'");
-        AddHistory(replacement.Id, $"Asset set to '{assetName}'");
-        AddHistory(replacement.Id, "Status changed from 'Unassigned' to 'Assigned'");
+        var entity = await FindTrackedAsync(id, cancellationToken, asNoTracking: false);
+        var target = await db.Assets.SingleOrDefaultAsync(x => x.Id == assetId, cancellationToken)
+            ?? throw new NotFoundException("Asset was not found.");
+        if (!target.IsActive)
+            throw new NotFoundException("Asset was not found.");
+        await EnsureAssetHasNoAssignedTagAsync(target.Id, id, cancellationToken);
+        var previous = entity.Asset?.Name;
+        entity.Asset = target;
+        entity.AssetId = target.Id;
+        entity.Status = IdentifierStatus.Assigned;
+        entity.EncodedAtUtc = DateTime.UtcNow;
+        entity.EncodedBy = currentUser.DisplayName;
+        AddHistory(entity.Id, string.IsNullOrWhiteSpace(previous)
+            ? $"Asset set to '{target.Name}'"
+            : $"Asset changed from '{previous}' to '{target.Name}'");
         await SaveAsync(cancellationToken);
-        return MapDetail(await FindTrackedAsync(replacementId, cancellationToken, asNoTracking: true));
+        return MapDetail(await FindTrackedAsync(id, cancellationToken, asNoTracking: true));
     }
 
     public async Task DeactivateAsync(Guid id, CancellationToken cancellationToken)
@@ -339,17 +331,11 @@ public sealed class RfidTagService(
                 "An identifier belongs to one asset and is never quietly moved to another. Replace the tag instead.");
     }
 
-    private async Task<Asset?> ResolveAssetAsync(string? value, CancellationToken cancellationToken)
+    private async Task<Asset?> ResolveAssetAsync(Guid? assetId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var trimmed = value.Trim();
-        Asset? asset;
-        if (Guid.TryParse(trimmed, out var id))
-            asset = await db.Assets.SingleOrDefaultAsync(x => x.Id == id && x.IsActive, cancellationToken);
-        else
-            asset = await db.Assets.SingleOrDefaultAsync(
-                x => (x.Name == trimmed || x.AssetNumber == trimmed) && x.IsActive, cancellationToken);
-        return asset ?? throw new NotFoundException($"Asset '{trimmed}' was not found.");
+        if (!assetId.HasValue || assetId == Guid.Empty) return null;
+        return await db.Assets.SingleOrDefaultAsync(x => x.Id == assetId && x.IsActive, cancellationToken)
+            ?? throw new NotFoundException("Asset was not found.");
     }
 
     private static IdentifierStatus ParseStatus(string? value)
@@ -363,7 +349,7 @@ public sealed class RfidTagService(
     private RfidTagDetailDto MapDetail(RfidTag entity) =>
         new(entity.Id, entity.TagIdentifier, entity.TagType,
             string.IsNullOrWhiteSpace(entity.EncodingStandard) ? null : entity.EncodingStandard,
-            entity.Status.ToString(), entity.MoreInformation, entity.Asset?.Name, entity.EncodedAtUtc, entity.EncodedBy,
+            entity.Status.ToString(), entity.MoreInformation, entity.AssetId, entity.Asset?.Name, entity.EncodedAtUtc, entity.EncodedBy,
             entity.ReplacedBy?.TagIdentifier, entity.RetiredAtUtc, Lifecycle);
 
     private static PagedResult<T> Page<T>(IReadOnlyCollection<T> rows, RfidTagListQuery query, int total)
