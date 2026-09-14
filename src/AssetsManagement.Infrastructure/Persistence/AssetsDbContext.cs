@@ -483,6 +483,15 @@ public sealed class AssetsDbContext(
             e.HasIndex(x => x.Number).IsUnique();
             e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        foreach (var type in builder.Model.GetEntityTypes())
+        {
+            if (type.ClrType.IsAbstract || !typeof(Entity).IsAssignableFrom(type.ClrType))
+                continue;
+            var id = type.FindProperty(nameof(Entity.Id));
+            if (id?.ClrType == typeof(Guid))
+                id.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.Never;
+        }
     }
 
     private static void ConfigureMaster<T>(ModelBuilder builder, string table) where T : CodedMasterEntity
@@ -505,11 +514,17 @@ public sealed class AssetsDbContext(
         e.Property(x => x.CreatedBy).HasMaxLength(256).IsRequired();
         e.Property(x => x.UpdatedBy).HasMaxLength(256);
         e.Property(x => x.DeletedBy).HasMaxLength(256);
-        e.Property(x => x.RowVersion).IsConcurrencyToken();
+        e.Property(x => x.RowVersion).IsRequired();
         e.HasIndex(x => x.IsActive);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        StampAudit();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void StampAudit()
     {
         var now = DateTime.UtcNow;
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
@@ -518,6 +533,8 @@ public sealed class AssetsDbContext(
             {
                 entry.Entity.CreatedAtUtc = now;
                 entry.Entity.CreatedBy = currentUser.UserName;
+                if (entry.Entity.RowVersion is not { Length: > 0 })
+                    entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
             }
             else if (entry.State == EntityState.Modified)
             {
@@ -526,6 +543,5 @@ public sealed class AssetsDbContext(
                 entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
             }
         }
-        return await base.SaveChangesAsync(cancellationToken);
     }
 }

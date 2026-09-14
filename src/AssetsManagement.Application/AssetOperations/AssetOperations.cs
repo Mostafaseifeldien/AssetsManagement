@@ -159,14 +159,14 @@ public sealed class MaintenanceConvertRequest
 }
 
 public sealed record MaintenanceRequestListItemDto(
-    Guid Id, string RequestNumber, Guid AssetId, string FaultDescription,
-    string Urgency, DateTime RaisedOn, string State);
+    Guid Id, string RequestNumber, Guid AssetId, string AssetName, string FaultDescription,
+    string Urgency, string Usable, DateTime RaisedOn, string? RaisedBy, string State);
 
 public sealed record MaintenanceRequestDetailDto(
-    Guid Id, string RequestNumber, Guid AssetId, Guid? RaisedById, DateTime RaisedOn,
-    string FaultDescription, string Urgency, bool AssetUsable, Guid? PhotographId,
-    string? LocationAtReport, string State, Guid? TriagedById, string? RejectionReason,
-    Guid? WorkOrderId, string Lifecycle);
+    Guid Id, string RequestNumber, Guid AssetId, string AssetName, Guid? RaisedById, string? RaisedBy,
+    DateTime RaisedOn, string FaultDescription, string Urgency, bool AssetUsable, string Usable,
+    Guid? PhotographId, string? LocationAtReport, string State, Guid? TriagedById,
+    string? RejectionReason, Guid? WorkOrderId, string Lifecycle);
 
 public sealed class WorkOrderRequest
 {
@@ -181,6 +181,11 @@ public sealed class WorkOrderRequest
     public Guid? ProviderId { get; init; }
     public bool? UnderWarranty { get; init; }
     public bool? AssetOutOfService { get; init; }
+    public string? WorkDone { get; init; }
+}
+
+public sealed class WorkOrderCompleteRequest
+{
     public string? WorkDone { get; init; }
 }
 
@@ -420,7 +425,7 @@ public interface IAssetOperationsService
     Task<WorkOrderDetailDto> CreateWorkOrderAsync(WorkOrderRequest request, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> UpdateWorkOrderAsync(Guid id, WorkOrderRequest request, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> StartWorkOrderAsync(Guid id, CancellationToken cancellationToken);
-    Task<WorkOrderDetailDto> CompleteWorkOrderAsync(Guid id, WorkOrderRequest request, CancellationToken cancellationToken);
+    Task<WorkOrderDetailDto> CompleteWorkOrderAsync(Guid id, WorkOrderCompleteRequest request, CancellationToken cancellationToken);
     Task<WorkOrderDetailDto> AddWorkOrderLineAsync(Guid id, WorkOrderLineRequest request, CancellationToken cancellationToken);
 
     Task<PagedResult<AssetInspectionListItemDto>> ListInspectionsAsync(AssetChildListQuery query, CancellationToken cancellationToken);
@@ -535,7 +540,6 @@ public sealed class MaintenanceRequestCreateValidator : AbstractValidator<Mainte
     public MaintenanceRequestCreateValidator()
     {
         RuleFor(x => x.AssetId).NotEmpty();
-        RuleFor(x => x.RaisedById).NotEmpty();
         RuleFor(x => x.FaultDescription).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.Urgency).Must(x => x is null || MaintenanceUrgencies.All.Contains(x))
             .WithMessage("Urgency must be Low, Normal, High or Asset stopped.");
@@ -563,6 +567,12 @@ public sealed class WorkOrderRequestValidator : AbstractValidator<WorkOrderReque
             .WithMessage("Priority must be Low, Normal, High or Critical.");
         RuleFor(x => x.WorkDone).MaximumLength(4000);
     }
+}
+
+public sealed class WorkOrderCompleteRequestValidator : AbstractValidator<WorkOrderCompleteRequest>
+{
+    public WorkOrderCompleteRequestValidator() =>
+        RuleFor(x => x.WorkDone).NotEmpty().MaximumLength(4000);
 }
 
 public sealed class WorkOrderLineRequestValidator : AbstractValidator<WorkOrderLineRequest>

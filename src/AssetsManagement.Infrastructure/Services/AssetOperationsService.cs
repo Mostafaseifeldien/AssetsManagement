@@ -93,12 +93,11 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
                 x.Id, x.WorkOrderNumber, x.AssetId, x.WorkKind, x.WorkDone, x.CompletedAtUtc,
                 x.TotalCost, x.UnderWarranty, x.State))
             .ToArrayAsync(cancellationToken);
-        var faults = await db.MaintenanceRequests.AsNoTracking()
+        var faultRows = await db.MaintenanceRequests.AsNoTracking()
             .Where(x => x.AssetId == assetId)
             .OrderByDescending(x => x.RaisedOnUtc)
-            .Select(x => new MaintenanceRequestListItemDto(
-                x.Id, x.RequestNumber, x.AssetId, x.FaultDescription, x.Urgency, x.RaisedOnUtc, x.State))
             .ToArrayAsync(cancellationToken);
+        var faults = await MapMaintRequestListAsync(faultRows, cancellationToken);
         var inspections = await db.AssetInspections.AsNoTracking()
             .Where(x => x.AssetId == assetId)
             .OrderByDescending(x => x.InspectedOn)
@@ -534,25 +533,27 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
             source = source.Where(x => x.RequestNumber.Contains(search) || x.FaultDescription.Contains(search));
         }
         source = source.OrderByDescending(x => x.RaisedOnUtc);
-        return await PageAsync(source.Select(x => new MaintenanceRequestListItemDto(
-            x.Id, x.RequestNumber, x.AssetId, x.FaultDescription, x.Urgency, x.RaisedOnUtc, x.State)),
-            query, cancellationToken);
+        var page = await PageAsync(source, query, cancellationToken);
+        var items = await MapMaintRequestListAsync(page.Items, cancellationToken);
+        return new(items, page.PageNumber, page.PageSize, page.TotalCount, page.TotalPages,
+            page.HasPreviousPage, page.HasNextPage);
     }
 
     public async Task<MaintenanceRequestDetailDto> GetRequestAsync(Guid id, CancellationToken cancellationToken) =>
-        MapMaintRequest(await FindMaintRequestAsync(id, cancellationToken));
+        await MapMaintRequestAsync(await FindMaintRequestAsync(id, cancellationToken), cancellationToken);
 
     public async Task<MaintenanceRequestDetailDto> CreateRequestAsync(
         MaintenanceRequestCreate request, CancellationToken cancellationToken)
     {
         var asset = await RequireAssetAsync(request.AssetId, cancellationToken);
-        await RequireEmployeeAsync(request.RaisedById, "Raised by", cancellationToken);
+        var raisedById = currentUser.UserId
+            ?? throw new DomainRuleException("A signed-in user is required to report a fault.");
         var urgency = request.Urgency ?? (request.AssetUsable == false ? "Asset stopped" : "Normal");
         var entity = new MaintenanceRequest
         {
             RequestNumber = await NextNumberAsync("MR", db.MaintenanceRequests.CountAsync(cancellationToken)),
             AssetId = asset.Id,
-            RaisedById = request.RaisedById,
+            RaisedById = raisedById,
             RaisedOnUtc = DateTime.UtcNow,
             FaultDescription = request.FaultDescription!.Trim(),
             Urgency = urgency,
@@ -563,7 +564,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
         db.MaintenanceRequests.Add(entity);
         AddHistory(nameof(MaintenanceRequest), entity.Id, "Record created");
         await db.SaveChangesAsync(cancellationToken);
-        return MapMaintRequest(entity);
+        return await MapMaintRequestAsync(entity, cancellationToken);
     }
 
     public async Task<MaintenanceRequestDetailDto> RejectRequestAsync(
@@ -575,7 +576,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
         entity.RejectionReason = request.RejectionReason!.Trim();
         AddHistory(nameof(MaintenanceRequest), entity.Id, "State changed to 'Rejected'");
         await db.SaveChangesAsync(cancellationToken);
-        return MapMaintRequest(entity);
+        return await MapMaintRequestAsync(entity, cancellationToken);
     }
 
     public async Task<WorkOrderDetailDto> ConvertRequestAsync(
@@ -663,7 +664,7 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
     }
 
     public async Task<WorkOrderDetailDto> CompleteWorkOrderAsync(
-        Guid id, WorkOrderRequest request, CancellationToken cancellationToken)
+        Guid id, WorkOrderCompleteRequest request, CancellationToken cancellationToken)
     {
         var entity = await FindWorkOrderAsync(id, cancellationToken);
         AssetDataRules.EnsureWorkOrderIsOpen(entity.State);
@@ -702,7 +703,9 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
             LineCost = Math.Round(qty * unit, 2),
             Chargeable = request.Chargeable != false && !entity.UnderWarranty
         };
-        entity.Lines.Add(line);
+        db.WorkOrderLines.Add(line);
+        if (!entity.Lines.Contains(line))
+            entity.Lines.Add(line);
         RecalcCost(entity);
         AddHistory(nameof(WorkOrder), entity.Id, $"Line {line.LineNumber} added");
         await db.SaveChangesAsync(cancellationToken);
@@ -1251,10 +1254,75 @@ public sealed class AssetOperationsService(AssetsDbContext db, ICurrentUser curr
     private static MaintenancePlanDto MapPlan(MaintenancePlan x) =>
         new(x.Id, x.Code, x.Name, x.ScopeKind, x.ScopeId, x.TriggerKind, x.TaskList, x.IntervalMonths, x.IsActive);
 
-    private static MaintenanceRequestDetailDto MapMaintRequest(MaintenanceRequest x) =>
-        new(x.Id, x.RequestNumber, x.AssetId, x.RaisedById, x.RaisedOnUtc, x.FaultDescription, x.Urgency,
-            x.AssetUsable, x.PhotographId, x.LocationAtReport, x.State, x.TriagedById, x.RejectionReason,
-            x.WorkOrderId, "Submitted → Triaged → Accepted → Converted | Rejected");
+    private async Task<IReadOnlyCollection<MaintenanceRequestListItemDto>> MapMaintRequestListAsync(
+        IReadOnlyCollection<MaintenanceRequest> rows, CancellationToken cancellationToken)
+    {
+        var extras = await LoadMaintRequestExtrasAsync(rows, cancellationToken);
+        return rows.Select(x => new MaintenanceRequestListItemDto(
+            x.Id, x.RequestNumber, x.AssetId, extras.AssetName(x.AssetId), x.FaultDescription,
+            x.Urgency, UsableText(x.AssetUsable), x.RaisedOnUtc, extras.RaisedByName(x.RaisedById), x.State))
+            .ToArray();
+    }
+
+    private async Task<MaintenanceRequestDetailDto> MapMaintRequestAsync(
+        MaintenanceRequest x, CancellationToken cancellationToken)
+    {
+        var extras = await LoadMaintRequestExtrasAsync([x], cancellationToken);
+        return new(
+            x.Id, x.RequestNumber, x.AssetId, extras.AssetName(x.AssetId), x.RaisedById,
+            extras.RaisedByName(x.RaisedById), x.RaisedOnUtc, x.FaultDescription, x.Urgency,
+            x.AssetUsable, UsableText(x.AssetUsable), x.PhotographId, x.LocationAtReport, x.State,
+            x.TriagedById, x.RejectionReason, x.WorkOrderId,
+            "Submitted → Triaged → Accepted → Converted | Rejected");
+    }
+
+    private async Task<MaintRequestExtras> LoadMaintRequestExtrasAsync(
+        IReadOnlyCollection<MaintenanceRequest> rows, CancellationToken cancellationToken)
+    {
+        var assetIds = rows.Select(x => x.AssetId).Distinct().ToArray();
+        var raisedByIds = rows.Where(x => x.RaisedById.HasValue).Select(x => x.RaisedById!.Value).Distinct().ToArray();
+        var assets = assetIds.Length == 0
+            ? []
+            : await db.Assets.AsNoTracking()
+                .Where(x => assetIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+        var userKeys = raisedByIds.Select(x => x.ToString()).ToArray();
+        var users = userKeys.Length == 0
+            ? []
+            : await db.Users.AsNoTracking()
+                .Where(x => userKeys.Contains(x.Id))
+                .Select(x => new { x.Id, Name = x.DisplayName ?? x.UserName })
+                .ToDictionaryAsync(x => x.Id.ToLower(), x => x.Name, cancellationToken);
+        var missing = raisedByIds.Where(id => !users.ContainsKey(id.ToString())).ToArray();
+        var employees = missing.Length == 0
+            ? []
+            : await db.Employees.AsNoTracking()
+                .Where(x => missing.Contains(x.Id))
+                .Select(x => new { x.Id, x.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+        return new(assets, users, employees);
+    }
+
+    private sealed record MaintRequestExtras(
+        Dictionary<Guid, string> Assets,
+        Dictionary<string, string?> Users,
+        Dictionary<Guid, string> Employees)
+    {
+        public string AssetName(Guid assetId) =>
+            Assets.TryGetValue(assetId, out var name) ? name : "";
+
+        public string? RaisedByName(Guid? raisedById)
+        {
+            if (!raisedById.HasValue) return null;
+            if (Users.TryGetValue(raisedById.Value.ToString("D").ToLowerInvariant(), out var user)
+                && !string.IsNullOrWhiteSpace(user))
+                return user;
+            return Employees.TryGetValue(raisedById.Value, out var employee) ? employee : null;
+        }
+    }
+
+    private static string UsableText(bool usable) => usable ? "yes" : "no";
 
     private static WorkOrderDetailDto MapWorkOrder(WorkOrder x) =>
         new(x.Id, x.WorkOrderNumber, x.AssetId, x.WorkKind, x.Source, x.SourceRequestId, x.Priority,

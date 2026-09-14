@@ -48,7 +48,7 @@ public sealed class WorkOrdersController(IAssetOperationsService service) : Cont
     [HttpPost("{id:guid}/complete")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<WorkOrderDetailDto>>> Complete(
-        Guid id, WorkOrderRequest request, CancellationToken cancellationToken) =>
+        Guid id, WorkOrderCompleteRequest request, CancellationToken cancellationToken) =>
         Ok(ApiResponse<WorkOrderDetailDto>.Ok(
             await service.CompleteWorkOrderAsync(id, request, cancellationToken), "Work order completed."));
 

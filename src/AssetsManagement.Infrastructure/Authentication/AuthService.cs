@@ -23,6 +23,7 @@ public sealed class AuthService(
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id),
+            new(ClaimTypes.NameIdentifier, user.Id),
             new(JwtRegisteredClaimNames.UniqueName, user.UserName!),
             new(ClaimTypes.Name, user.UserName!),
             new("display_name", user.DisplayName ?? user.UserName!),

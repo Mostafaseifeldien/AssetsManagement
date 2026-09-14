@@ -575,7 +575,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"raisedById\": \"{{recordId}}\",\n  \"faultDescription\": \"Will not power on\",\n  \"urgency\": \"High\",\n  \"assetUsable\": false\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"faultDescription\": \"Will not power on\",\n  \"urgency\": \"High\",\n  \"assetUsable\": false\n}" },
             "url": "{{baseUrl}}/api/maintenance-requests"
           }
         },
